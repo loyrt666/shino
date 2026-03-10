@@ -7,6 +7,7 @@ local players = game:GetService("Players")
 
 -- Состояние функций и цветов
 local settings = {
+    active = true, -- Флаг работы скрипта
     menuVisible = true,
     espBoxes = false,
     espNames = false,
@@ -19,18 +20,19 @@ local settings = {
 }
 
 local espObjects = {}
+local connections = {} -- Для хранения событий
 
 -- ==========================================
 -- 1. ИНТЕРФЕЙС (UI)
 -- ==========================================
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "CustomColorMenu"
+screenGui.Name = "RobloxMaster_SHINO"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = playerGui
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 320, 0, 420)
-mainFrame.Position = UDim2.new(0.5, -160, 0.5, -210)
+mainFrame.Size = UDim2.new(0, 320, 0, 460) -- Увеличил высоту для новой кнопки
+mainFrame.Position = UDim2.new(0.5, -160, 0.5, -230)
 mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 mainFrame.Active = true
 mainFrame.Draggable = true
@@ -40,7 +42,7 @@ Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 40)
 title.BackgroundTransparency = 1
-title.Text = "ESP & Color Settings [Insert]"
+title.Text = "SHINO MENU [Insert]"
 title.TextColor3 = Color3.new(1, 1, 1)
 title.TextSize = 16
 title.Font = Enum.Font.SourceSansBold
@@ -90,32 +92,29 @@ local function createColorPicker(label, settingKey, position, colors)
     end
 end
 
--- Основные настройки
+-- Кнопка ВЫГРУЗКИ (Unload)
+local unloadBtn = Instance.new("TextButton")
+unloadBtn.Size = UDim2.new(0, 280, 0, 40)
+unloadBtn.Position = UDim2.new(0, 20, 0, 400)
+unloadBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+unloadBtn.Text = "UNLOAD SCRIPT"
+unloadBtn.TextColor3 = Color3.new(1, 1, 1)
+unloadBtn.Font = Enum.Font.SourceSansBold
+unloadBtn.Parent = mainFrame
+Instance.new("UICorner", unloadBtn).CornerRadius = UDim.new(0, 5)
+
+-- Настройки
 createToggle("ESP Boxes", "espBoxes", UDim2.new(0, 20, 0, 50))
 createToggle("ESP Names", "espNames", UDim2.new(0, 20, 0, 90))
-createToggle("Team Check (Ally Color)", "teamCheck", UDim2.new(0, 20, 0, 130))
+createToggle("Team Check", "teamCheck", UDim2.new(0, 20, 0, 130))
 
--- Настройка цветов
 local presetColors = {
-    Color3.fromRGB(255, 255, 255), -- Белый
-    Color3.fromRGB(255, 0, 0),     -- Красный
-    Color3.fromRGB(0, 255, 0),     -- Зеленый
-    Color3.fromRGB(0, 255, 255),   -- Голубой
-    Color3.fromRGB(255, 255, 0),   -- Желтый
-    Color3.fromRGB(170, 0, 255)    -- Фиолетовый
+    Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 0, 0), Color3.fromRGB(0, 255, 0),
+    Color3.fromRGB(0, 255, 255), Color3.fromRGB(255, 255, 0), Color3.fromRGB(170, 0, 255)
 }
-
 createColorPicker("Visible Enemy Color:", "colorVisible", UDim2.new(0, 20, 0, 180), presetColors)
 createColorPicker("Hidden Enemy Color:", "colorHidden", UDim2.new(0, 20, 0, 240), presetColors)
 createColorPicker("Ally Color:", "colorAlly", UDim2.new(0, 20, 0, 300), presetColors)
-
--- Скрытие меню
-userInputService.InputBegan:Connect(function(input, gp)
-    if not gp and input.KeyCode == Enum.KeyCode.Insert then
-        settings.menuVisible = not settings.menuVisible
-        mainFrame.Visible = settings.menuVisible
-    end
-end)
 
 -- ==========================================
 -- 2. ЛОГИКА ESP
@@ -131,6 +130,7 @@ local function checkVisibility(targetChar)
 end
 
 local function updateEsp()
+    if not settings.active then return end
     local myChar = player.Character
     if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return end
 
@@ -150,22 +150,14 @@ local function updateEsp()
                 finalColor = visible and settings.colorVisible or settings.colorHidden
             end
 
-            if settings.espBoxes then
-                objects.Highlight.Enabled = true
-                objects.Highlight.FillColor = finalColor
-                objects.Highlight.OutlineColor = finalColor
-            else
-                objects.Highlight.Enabled = false
-            end
+            objects.Highlight.Enabled = settings.espBoxes
+            objects.Highlight.FillColor = finalColor
+            objects.Highlight.OutlineColor = finalColor
 
-            if settings.espNames then
-                objects.Billboard.Enabled = true
-                objects.NameLabel.TextColor3 = finalColor
-                local dist = math.floor((root.Position - myChar.HumanoidRootPart.Position).Magnitude)
-                objects.NameLabel.Text = targetPlayer.Name .. " [" .. dist .. "s]"
-            else
-                objects.Billboard.Enabled = false
-            end
+            objects.Billboard.Enabled = settings.espNames
+            objects.NameLabel.TextColor3 = finalColor
+            local dist = math.floor((root.Position - myChar.HumanoidRootPart.Position).Magnitude)
+            objects.NameLabel.Text = targetPlayer.Name .. " [" .. dist .. "s]"
         else
             objects.Highlight.Enabled = false
             objects.Billboard.Enabled = false
@@ -176,6 +168,7 @@ end
 local function createEsp(targetPlayer)
     if targetPlayer == player then return end
     local function setup(character)
+        if not settings.active then return end
         if espObjects[targetPlayer] then
             pcall(function() espObjects[targetPlayer].Highlight:Destroy() espObjects[targetPlayer].Billboard:Destroy() end)
         end
@@ -195,10 +188,40 @@ local function createEsp(targetPlayer)
         label.TextStrokeTransparency = 0.5
         espObjects[targetPlayer] = { Highlight = highlight, Billboard = billboard, NameLabel = label }
     end
-    targetPlayer.CharacterAdded:Connect(setup)
+    table.insert(connections, targetPlayer.CharacterAdded:Connect(setup))
     if targetPlayer.Character then setup(targetPlayer.Character) end
 end
 
-players.PlayerAdded:Connect(createEsp)
+-- Инициализация
+table.insert(connections, players.PlayerAdded:Connect(createEsp))
 for _, p in pairs(players:GetPlayers()) do createEsp(p) end
-runService.RenderStepped:Connect(updateEsp)
+local mainLoop = runService.RenderStepped:Connect(updateEsp)
+table.insert(connections, mainLoop)
+
+-- Управление клавишей Insert
+table.insert(connections, userInputService.InputBegan:Connect(function(input, gp)
+    if not gp and input.KeyCode == Enum.KeyCode.Insert then
+        settings.menuVisible = not settings.menuVisible
+        mainFrame.Visible = settings.menuVisible
+    end
+end))
+
+-- ЛОГИКА ВЫГРУЗКИ
+unloadBtn.MouseButton1Click:Connect(function()
+    settings.active = false
+    -- Отключаем все события
+    for _, conn in pairs(connections) do
+        if conn then conn:Disconnect() end
+    end
+    -- Удаляем интерфейс
+    screenGui:Destroy()
+    -- Удаляем все ESP объекты
+    for targetPlayer, objects in pairs(espObjects) do
+        pcall(function()
+            objects.Highlight:Destroy()
+            objects.Billboard:Destroy()
+        end)
+    end
+    espObjects = {}
+    print("Script Unloaded Successfully")
+end)
