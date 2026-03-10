@@ -33,8 +33,42 @@ local settings = {
     flySpeed = 50,
     noClipEnabled = false,
     
+    -- New Movement Settings
+    infiniteJumpEnabled = false,
+    walkSpeed = 16,
+    jumpPower = 50,
+
+    -- Anti-AFK
+    antiAfkEnabled = false,
+
+    -- Keybinds (example, will be dynamic)
+    keybinds = {
+        toggleMenu = Enum.KeyCode.Insert,
+        toggleFly = Enum.KeyCode.F,
+        toggleNoClip = Enum.KeyCode.G,
+        toggleInfiniteJump = Enum.KeyCode.Space,
+        toggleAntiAfk = Enum.KeyCode.K,
+    },
+
+    
     -- Config
-    configName = "ShinoConfig.json"
+    configName = "ShinoConfig.json",
+    -- UI Enhancements
+    menuAccentColor = Color3.fromRGB(170, 0, 255),
+    menuBackgroundColor = Color3.fromRGB(15, 15, 15),
+    menuSidebarColor = Color3.fromRGB(20, 20, 20),
+    menuTextColor = Color3.fromRGB(230, 230, 230),
+    menuButtonColor = Color3.fromRGB(25, 25, 25),
+    menuButtonHoverColor = Color3.fromRGB(35, 35, 35),
+    menuButtonActiveColor = Color3.fromRGB(170, 0, 255),
+    menuCornerRadius = 10,
+    menuButtonCornerRadius = 8,
+    toggleButtonColor = Color3.fromRGB(45, 45, 45),
+    toggleCircleColor = Color3.new(1, 1, 1),
+    sliderBgColor = Color3.fromRGB(40, 40, 40),
+    sliderFillColor = Color3.fromRGB(170, 0, 255),
+    colorPickerColors = {Color3.new(1,1,1), Color3.new(1,0,0), Color3.new(0,1,0), Color3.new(0,1,1), Color3.new(1,1,0), Color3.fromRGB(170, 0, 255)},
+
 }
 
 local espObjects = {}
@@ -49,7 +83,7 @@ watermarkGui.ResetOnSpawn = false
 local watermarkFrame = Instance.new("Frame", watermarkGui)
 watermarkFrame.Size = UDim2.new(0, settings.watermarkSize, 0, 30)
 watermarkFrame.Position = UDim2.new(0, 20, 0, 20)
-watermarkFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+watermarkFrame.BackgroundColor3 = settings.menuBackgroundColor
 watermarkFrame.BorderSizePixel = 0
 watermarkFrame.Active = true
 watermarkFrame.Draggable = true
@@ -73,7 +107,7 @@ local watermarkText = Instance.new("TextLabel", watermarkFrame)
 watermarkText.Size = UDim2.new(1, -20, 1, 0)
 watermarkText.Position = UDim2.new(0, 10, 0, 0)
 watermarkText.BackgroundTransparency = 1
-watermarkText.TextColor3 = Color3.new(1, 1, 1)
+watermarkText.TextColor3 = settings.menuTextColor
 watermarkText.TextSize = 14
 watermarkText.Font = Enum.Font.Code
 watermarkText.Text = "SHINO.cc"
@@ -109,22 +143,22 @@ screenGui.ResetOnSpawn = false
 local mainFrame = Instance.new("Frame", screenGui)
 mainFrame.Size = UDim2.new(0, 550, 0, 380)
 mainFrame.Position = UDim2.new(0.5, -275, 0.5, -190)
-mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+mainFrame.BackgroundColor3 = settings.menuBackgroundColor
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 mainFrame.Draggable = true
-Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, settings.menuCornerRadius)
 createGlow(mainFrame, 30)
 
 local sideBar = Instance.new("Frame", mainFrame)
 sideBar.Size = UDim2.new(0, 150, 1, 0)
-sideBar.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+sideBar.BackgroundColor3 = settings.menuSidebarColor
 Instance.new("UICorner", sideBar).CornerRadius = UDim.new(0, 10)
 
 local title = Instance.new("TextLabel", sideBar)
 title.Size = UDim2.new(1, 0, 0, 60)
 title.Text = "SHINO"
-title.TextColor3 = settings.accent
+title.TextColor3 = settings.menuAccentColor
 title.TextSize = 28
 title.Font = Enum.Font.GothamBold
 title.BackgroundTransparency = 1
@@ -147,14 +181,14 @@ Instance.new("UIListLayout", contentArea).Padding = UDim.new(0, 12)
 local function createToggle(name, key, parent)
     local frame = Instance.new("Frame", parent)
     frame.Size = UDim2.new(1, -15, 0, 45)
-    frame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+    frame.BackgroundColor3 = settings.menuBackgroundColor
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, settings.menuButtonCornerRadius)
     
     local label = Instance.new("TextLabel", frame)
     label.Size = UDim2.new(1, -70, 1, 0)
     label.Position = UDim2.new(0, 15, 0, 0)
     label.Text = name
-    label.TextColor3 = Color3.fromRGB(230, 230, 230)
+    label.TextColor3 = settings.menuTextColor
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.BackgroundTransparency = 1
     label.Font = Enum.Font.Gotham
@@ -163,20 +197,20 @@ local function createToggle(name, key, parent)
     local toggleBtn = Instance.new("TextButton", frame)
     toggleBtn.Size = UDim2.new(0, 44, 0, 22)
     toggleBtn.Position = UDim2.new(1, -55, 0.5, -11)
-    toggleBtn.BackgroundColor3 = settings[key] and settings.accent or Color3.fromRGB(45, 45, 45)
+    toggleBtn.BackgroundColor3 = settings[key] and settings.menuAccentColor or settings.toggleButtonColor
     toggleBtn.Text = ""
     Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
     
     local circle = Instance.new("Frame", toggleBtn)
     circle.Size = UDim2.new(0, 18, 0, 18)
     circle.Position = settings[key] and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)
-    circle.BackgroundColor3 = Color3.new(1, 1, 1)
+    circle.BackgroundColor3 = settings.toggleCircleColor
     Instance.new("UICorner", circle).CornerRadius = UDim.new(1, 0)
     
     toggleBtn.MouseButton1Click:Connect(function()
         settings[key] = not settings[key]
         local targetPos = settings[key] and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)
-        local targetColor = settings[key] and settings.accent or Color3.fromRGB(45, 45, 45)
+        local targetColor = settings[key] and settings.menuAccentColor or settings.toggleButtonColor
         tweenService:Create(circle, TweenInfo.new(0.2), {Position = targetPos}):Play()
         tweenService:Create(toggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = targetColor}):Play()
         
@@ -192,7 +226,7 @@ local function createSlider(name, key, min, max, parent)
     local label = Instance.new("TextLabel", frame)
     label.Size = UDim2.new(1, 0, 0, 20)
     label.Text = name .. ": " .. settings[key]
-    label.TextColor3 = Color3.fromRGB(200, 200, 200)
+    label.TextColor3 = settings.menuTextColor
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.BackgroundTransparency = 1
     label.Font = Enum.Font.Gotham
@@ -200,11 +234,11 @@ local function createSlider(name, key, min, max, parent)
     local sliderBg = Instance.new("Frame", frame)
     sliderBg.Size = UDim2.new(1, 0, 0, 6)
     sliderBg.Position = UDim2.new(0, 0, 0, 30)
-    sliderBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    sliderBg.BackgroundColor3 = settings.sliderBgColor
     Instance.new("UICorner", sliderBg)
     local fill = Instance.new("Frame", sliderBg)
     fill.Size = UDim2.new((settings[key] - min) / (max - min), 0, 1, 0)
-    fill.BackgroundColor3 = settings.accent
+    fill.BackgroundColor3 = settings.sliderFillColor
     Instance.new("UICorner", fill)
     local function update(input)
         local pos = math.clamp((input.Position.X - sliderBg.AbsolutePosition.X) / sliderBg.AbsoluteSize.X, 0, 1)
@@ -220,6 +254,48 @@ local function createSlider(name, key, min, max, parent)
     userInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
 end
 
+local function createKeybind(name, key, parent)
+    local frame = Instance.new("Frame", parent)
+    frame.Size = UDim2.new(1, -15, 0, 45)
+    frame.BackgroundColor3 = settings.menuBackgroundColor
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, settings.menuButtonCornerRadius)
+
+    local label = Instance.new("TextLabel", frame)
+    label.Size = UDim2.new(1, -70, 1, 0)
+    label.Position = UDim2.new(0, 15, 0, 0)
+    label.Text = name
+    label.TextColor3 = settings.menuTextColor
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 15
+
+    local keybindBtn = Instance.new("TextButton", frame)
+    keybindBtn.Size = UDim2.new(0, 60, 0, 22)
+    keybindBtn.Position = UDim2.new(1, -75, 0.5, -11)
+    keybindBtn.BackgroundColor3 = settings.toggleButtonColor
+    keybindBtn.Text = settings.keybinds[key].Name
+    keybindBtn.TextColor3 = settings.menuTextColor
+    Instance.new("UICorner", keybindBtn).CornerRadius = UDim.new(0, settings.menuButtonCornerRadius)
+
+    local waitingForKey = false
+    keybindBtn.MouseButton1Click:Connect(function()
+        if waitingForKey then return end
+        waitingForKey = true
+        keybindBtn.Text = "Press Key..."
+        local inputConnection
+        inputConnection = userInputService.InputBegan:Connect(function(input, gp)
+            if gp then return end
+            if input.UserInputType == Enum.UserInputType.Keyboard then
+                settings.keybinds[key] = input.KeyCode
+                keybindBtn.Text = input.KeyCode.Name
+                waitingForKey = false
+                inputConnection:Disconnect()
+            end
+        end)
+    end)
+end
+
 local function createColorPicker(label, key, parent)
     local frame = Instance.new("Frame", parent)
     frame.Size = UDim2.new(1, -15, 0, 60)
@@ -227,7 +303,7 @@ local function createColorPicker(label, key, parent)
     local txt = Instance.new("TextLabel", frame)
     txt.Size = UDim2.new(1, 0, 0, 20)
     txt.Text = label
-    txt.TextColor3 = Color3.fromRGB(200, 200, 200)
+    txt.TextColor3 = settings.menuTextColor
     txt.TextXAlignment = Enum.TextXAlignment.Left
     txt.BackgroundTransparency = 1
     txt.Font = Enum.Font.Gotham
@@ -239,7 +315,7 @@ local function createColorPicker(label, key, parent)
     local layout = Instance.new("UIListLayout", container)
     layout.FillDirection = Enum.FillDirection.Horizontal
     layout.Padding = UDim.new(0, 8)
-    local colors = {Color3.new(1,1,1), Color3.new(1,0,0), Color3.new(0,1,0), Color3.new(0,1,1), Color3.new(1,1,0), Color3.fromRGB(170, 0, 255)}
+    local colors = settings.colorPickerColors
     for _, color in ipairs(colors) do
         local btn = Instance.new("TextButton", container)
         btn.Size = UDim2.new(0, 30, 0, 30)
@@ -266,10 +342,52 @@ local function updateMenu()
         createToggle("Fly", "flyEnabled", contentArea)
         createSlider("Fly Speed", "flySpeed", 1, 100, contentArea)
         createToggle("NoClip", "noClipEnabled", contentArea)
+        createToggle("Infinite Jump", "infiniteJumpEnabled", contentArea)
+        createSlider("WalkSpeed", "walkSpeed", 16, 100, contentArea)
+        createSlider("JumpPower", "jumpPower", 50, 200, contentArea)
+    elseif settings.currentTab == "Player" then
+        for _, p in pairs(players:GetPlayers()) do
+            if p ~= player then
+                local playerFrame = Instance.new("Frame", contentArea)
+                playerFrame.Size = UDim2.new(1, -15, 0, 45)
+                playerFrame.BackgroundColor3 = settings.menuBackgroundColor
+                Instance.new("UICorner", playerFrame).CornerRadius = UDim.new(0, settings.menuButtonCornerRadius)
+
+                local playerName = Instance.new("TextLabel", playerFrame)
+                playerName.Size = UDim2.new(1, -100, 1, 0)
+                playerName.Position = UDim2.new(0, 15, 0, 0)
+                playerName.Text = p.Name
+                playerName.TextColor3 = settings.menuTextColor
+                playerName.TextXAlignment = Enum.TextXAlignment.Left
+                playerName.BackgroundTransparency = 1
+                playerName.Font = Enum.Font.Gotham
+                playerName.TextSize = 15
+
+                local teleportBtn = Instance.new("TextButton", playerFrame)
+                teleportBtn.Size = UDim2.new(0, 80, 0, 25)
+                teleportBtn.Position = UDim2.new(1, -95, 0.5, -12.5)
+                teleportBtn.BackgroundColor3 = settings.menuAccentColor
+                teleportBtn.Text = "Teleport"
+                teleportBtn.TextColor3 = settings.menuTextColor
+                Instance.new("UICorner", teleportBtn).CornerRadius = UDim.new(0, settings.menuButtonCornerRadius)
+
+                teleportBtn.MouseButton1Click:Connect(function()
+                    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                        player.Character.HumanoidRootPart.CFrame = p.Character.HumanoidRootPart.CFrame
+                    end
+                end)
+            end
+        end
+    elseif settings.currentTab == "Keybinds" then
+        createKeybind("Toggle Menu", "toggleMenu", contentArea)
+        createKeybind("Toggle Fly", "toggleFly", contentArea)
+        createKeybind("Toggle NoClip", "toggleNoClip", contentArea)
+        createKeybind("Toggle Infinite Jump", "toggleInfiniteJump", contentArea)
+        createKeybind("Toggle Anti-AFK", "toggleAntiAfk", contentArea)
     elseif settings.currentTab == "Misc" then
         local save = Instance.new("TextButton", contentArea)
         save.Size = UDim2.new(1, -15, 0, 40)
-        save.BackgroundColor3 = Color3.fromRGB(30, 100, 30)
+        save.BackgroundColor3 = settings.menuAccentColor
         save.Text = "Save Config"
         save.TextColor3 = Color3.new(1,1,1)
         save.Font = Enum.Font.GothamBold
@@ -294,19 +412,19 @@ end
 local function createTab(name)
     local btn = Instance.new("TextButton", tabContainer)
     btn.Size = UDim2.new(0.85, 0, 0, 40)
-    btn.BackgroundColor3 = settings.currentTab == name and settings.accent or Color3.fromRGB(25, 25, 25)
+    btn.BackgroundColor3 = settings.currentTab == name and settings.menuAccentColor or settings.menuButtonColor
     btn.Text = name
-    btn.TextColor3 = settings.currentTab == name and Color3.new(1, 1, 1) or Color3.fromRGB(150, 150, 150)
+    btn.TextColor3 = settings.currentTab == name and settings.menuTextColor or Color3.fromRGB(150, 150, 150)
     btn.Font = Enum.Font.GothamSemibold
     btn.TextSize = 14
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, settings.menuButtonCornerRadius)
     
     btn.MouseButton1Click:Connect(function()
         settings.currentTab = name
         for _, v in pairs(tabContainer:GetChildren()) do
             if v:IsA("TextButton") then
                 local isCurrent = (v.Text == settings.currentTab)
-                tweenService:Create(v, TweenInfo.new(0.3), {BackgroundColor3 = isCurrent and settings.accent or Color3.fromRGB(25, 25, 25), TextColor3 = isCurrent and Color3.new(1, 1, 1) or Color3.fromRGB(150, 150, 150)}):Play()
+                tweenService:Create(v, TweenInfo.new(0.3), {BackgroundColor3 = isCurrent and settings.menuAccentColor or settings.menuButtonColor, TextColor3 = isCurrent and settings.menuTextColor or Color3.fromRGB(150, 150, 150)}):Play()
             end
         end
         updateMenu()
@@ -316,6 +434,8 @@ end
 createTab("Visuals")
 createTab("Movement")
 createTab("Misc")
+createTab("Player")
+createTab("Keybinds")
 updateMenu()
 
 -- ==========================================
@@ -422,17 +542,55 @@ runService.RenderStepped:Connect(function()
         if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
         if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
     end
+
+    -- Infinite Jump
+    if settings.infiniteJumpEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
+        local hum = player.Character.Humanoid
+        if hum:GetState() == Enum.HumanoidStateType.Freefall then
+            hum:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end
+
+    -- WalkSpeed and JumpPower
+    if player.Character and player.Character:FindFirstChild("Humanoid") then
+        player.Character.Humanoid.WalkSpeed = settings.walkSpeed
+        player.Character.Humanoid.JumpPower = settings.jumpPower
+    end
 end)
 
 runService.Stepped:Connect(function()
     if settings.noClipEnabled and player.Character then
         for _, part in pairs(player.Character:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
     end
+
+    -- Anti-AFK
+    if settings.antiAfkEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
+        local hum = player.Character.Humanoid
+        if hum.Health > 0 and hum:GetState() == Enum.HumanoidStateType.Running then
+            -- Simulate small movement to prevent AFK kick
+            local currentPos = player.Character.HumanoidRootPart.Position
+            player.Character.HumanoidRootPart.CFrame = CFrame.new(currentPos + Vector3.new(0.01, 0, 0))
+            task.wait(0.1)
+            player.Character.HumanoidRootPart.CFrame = CFrame.new(currentPos)
+        end
+    end
 end)
 
 userInputService.InputBegan:Connect(function(input, gp)
-    if not gp and input.KeyCode == Enum.KeyCode.Insert then
+    if not gp and input.KeyCode == settings.keybinds.toggleMenu then
         settings.menuVisible = not settings.menuVisible
         mainFrame.Visible = settings.menuVisible
+    elseif not gp and input.KeyCode == settings.keybinds.toggleFly then
+        settings.flyEnabled = not settings.flyEnabled
+        updateMenu() -- Refresh menu to show toggle state
+    elseif not gp and input.KeyCode == settings.keybinds.toggleNoClip then
+        settings.noClipEnabled = not settings.noClipEnabled
+        updateMenu() -- Refresh menu to show toggle state
+    elseif not gp and input.KeyCode == settings.keybinds.toggleInfiniteJump then
+        settings.infiniteJumpEnabled = not settings.infiniteJumpEnabled
+        updateMenu() -- Refresh menu to show toggle state
+    elseif not gp and input.KeyCode == settings.keybinds.toggleAntiAfk then
+        settings.antiAfkEnabled = not settings.antiAfkEnabled
+        updateMenu() -- Refresh menu to show toggle state
     end
 end)
