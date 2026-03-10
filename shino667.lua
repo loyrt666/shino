@@ -1,9 +1,11 @@
--- Ссылки на сервисы
+-- [[ SHINO V3.3: WATERMARK FIX ]] --
 local player = game.Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local userInputService = game:GetService("UserInputService")
 local runService = game:GetService("RunService")
 local players = game:GetService("Players")
+local stats = game:GetService("Stats")
+local tweenService = game:GetService("TweenService")
 local httpService = game:GetService("HttpService" )
 
 -- Состояние функций
@@ -11,17 +13,20 @@ local settings = {
     active = true,
     menuVisible = true,
     currentTab = "Visuals",
+    accent = Color3.fromRGB(170, 0, 255),
     
     -- Visuals
     espBoxes = false,
     espNames = false,
     espHealth = false,
     teamCheck = true,
+    watermarkEnabled = true,
+    watermarkSize = 280,
     
-    -- Настраиваемые цвета
-    colorVisible = Color3.fromRGB(255, 255, 255), -- Белый
-    colorHidden = Color3.fromRGB(170, 0, 255),    -- Фиолетовый
-    colorAlly = Color3.fromRGB(0, 255, 120),       -- Зеленый
+    -- Colors
+    colorVisible = Color3.fromRGB(255, 255, 255),
+    colorHidden = Color3.fromRGB(170, 0, 255),
+    colorAlly = Color3.fromRGB(0, 255, 120),
     
     -- Movement
     flyEnabled = false,
@@ -33,176 +38,289 @@ local settings = {
 }
 
 local espObjects = {}
-local connections = {}
 
 -- ==========================================
--- 1. ИНТЕРФЕЙС (UI с вкладками и цветами)
+-- 1. WATERMARK (ИСПРАВЛЕННАЯ ЛОГИКА)
+-- ==========================================
+local watermarkGui = Instance.new("ScreenGui", playerGui)
+watermarkGui.Name = "ShinoWatermark"
+watermarkGui.ResetOnSpawn = false
+
+local watermarkFrame = Instance.new("Frame", watermarkGui)
+watermarkFrame.Size = UDim2.new(0, settings.watermarkSize, 0, 30)
+watermarkFrame.Position = UDim2.new(0, 20, 0, 20)
+watermarkFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+watermarkFrame.BorderSizePixel = 0
+watermarkFrame.Active = true
+watermarkFrame.Draggable = true
+Instance.new("UICorner", watermarkFrame).CornerRadius = UDim.new(0, 6)
+
+local function createGlow(parent, size)
+    local glow = Instance.new("ImageLabel", parent)
+    glow.Name = "Glow"
+    glow.BackgroundTransparency = 1
+    glow.Position = UDim2.new(0, -size, 0, -size)
+    glow.Size = UDim2.new(1, size*2, 1, size*2)
+    glow.ZIndex = parent.ZIndex - 1
+    glow.Image = "rbxassetid://1316045217"
+    glow.ImageColor3 = settings.accent
+    glow.ImageTransparency = 0.6
+    return glow
+end
+createGlow(watermarkFrame, 15)
+
+local watermarkText = Instance.new("TextLabel", watermarkFrame)
+watermarkText.Size = UDim2.new(1, -20, 1, 0)
+watermarkText.Position = UDim2.new(0, 10, 0, 0)
+watermarkText.BackgroundTransparency = 1
+watermarkText.TextColor3 = Color3.new(1, 1, 1)
+watermarkText.TextSize = 14
+watermarkText.Font = Enum.Font.Code
+watermarkText.Text = "SHINO.cc"
+watermarkText.TextXAlignment = Enum.TextXAlignment.Left
+
+-- ФУНКЦИЯ ОБНОВЛЕНИЯ (ВЫЗЫВАЕТСЯ ИЗ МЕНЮ И ЦИКЛА)
+local function updateWatermarkVisual()
+    watermarkFrame.Visible = settings.watermarkEnabled
+    watermarkFrame.Size = UDim2.new(0, settings.watermarkSize, 0, 30)
+    watermarkFrame.Active = settings.menuVisible
+    watermarkFrame.Draggable = settings.menuVisible
+end
+
+task.spawn(function()
+    while task.wait(0.2) do
+        if not settings.active then break end
+        if settings.watermarkEnabled then
+            local fps = math.floor(stats.Network.RenderPps)
+            local ping = math.floor(player:GetNetworkPing() * 1000)
+            watermarkText.Text = string.format("SHINO.cc | %s | %d FPS | %d MS", player.Name:upper(), fps, ping)
+        end
+        updateWatermarkVisual()
+    end
+end)
+
+-- ==========================================
+-- 2. ГЛАВНОЕ МЕНЮ (С ИСПРАВЛЕННЫМИ КНОПКАМИ)
 -- ==========================================
 local screenGui = Instance.new("ScreenGui", playerGui)
-screenGui.Name = "ShinoPremiumMenu"
+screenGui.Name = "ShinoNeonMenu"
 screenGui.ResetOnSpawn = false
 
 local mainFrame = Instance.new("Frame", screenGui)
-mainFrame.Size = UDim2.new(0, 420, 0, 400)
-mainFrame.Position = UDim2.new(0.5, -210, 0.5, -200)
-mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+mainFrame.Size = UDim2.new(0, 550, 0, 380)
+mainFrame.Position = UDim2.new(0.5, -275, 0.5, -190)
+mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 mainFrame.Draggable = true
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
+createGlow(mainFrame, 30)
 
--- Боковая панель вкладок
-local tabHolder = Instance.new("Frame", mainFrame)
-tabHolder.Size = UDim2.new(0, 100, 1, 0)
-tabHolder.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-Instance.new("UICorner", tabHolder).CornerRadius = UDim.new(0, 10)
+local sideBar = Instance.new("Frame", mainFrame)
+sideBar.Size = UDim2.new(0, 150, 1, 0)
+sideBar.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Instance.new("UICorner", sideBar).CornerRadius = UDim.new(0, 10)
 
--- Контейнер для контента (со скроллом, если функций много)
-local contentFrame = Instance.new("ScrollingFrame", mainFrame)
-contentFrame.Size = UDim2.new(1, -115, 1, -20)
-contentFrame.Position = UDim2.new(0, 110, 0, 10)
-contentFrame.BackgroundTransparency = 1
-contentFrame.ScrollBarThickness = 2
-contentFrame.CanvasSize = UDim2.new(0, 0, 1.2, 0)
+local title = Instance.new("TextLabel", sideBar)
+title.Size = UDim2.new(1, 0, 0, 60)
+title.Text = "SHINO"
+title.TextColor3 = settings.accent
+title.TextSize = 28
+title.Font = Enum.Font.GothamBold
+title.BackgroundTransparency = 1
 
-local function clearContent()
-    for _, child in pairs(contentFrame:GetChildren()) do 
-        if not child:IsA("UIListLayout") then child:Destroy() end 
-    end
-end
+local tabContainer = Instance.new("Frame", sideBar)
+tabContainer.Size = UDim2.new(1, 0, 1, -70)
+tabContainer.Position = UDim2.new(0, 0, 0, 70)
+tabContainer.BackgroundTransparency = 1
+Instance.new("UIListLayout", tabContainer).HorizontalAlignment = Enum.HorizontalAlignment.Center
 
-local layout = Instance.new("UIListLayout", contentFrame)
-layout.Padding = UDim.new(0, 8)
+local contentArea = Instance.new("ScrollingFrame", mainFrame)
+contentArea.Size = UDim2.new(1, -170, 1, -30)
+contentArea.Position = UDim2.new(0, 160, 0, 15)
+contentArea.BackgroundTransparency = 1
+contentArea.ScrollBarThickness = 0
+contentArea.CanvasSize = UDim2.new(0, 0, 2.5, 0)
+Instance.new("UIListLayout", contentArea).Padding = UDim.new(0, 12)
 
--- Вспомогательные функции UI
-local function createToggle(name, settingKey, parent)
-    local btn = Instance.new("TextButton", parent)
-    btn.Size = UDim2.new(1, -10, 0, 35)
-    btn.BackgroundColor3 = settings[settingKey] and Color3.fromRGB(0, 140, 70) or Color3.fromRGB(50, 50, 50)
-    btn.Text = name .. ": " .. (settings[settingKey] and "ON" or "OFF")
-    btn.TextColor3 = Color3.new(1, 1, 1)
-    btn.Font = Enum.Font.SourceSansBold
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 5)
-    btn.MouseButton1Click:Connect(function()
-        settings[settingKey] = not settings[settingKey]
-        btn.Text = name .. ": " .. (settings[settingKey] and "ON" or "OFF")
-        btn.BackgroundColor3 = settings[settingKey] and Color3.fromRGB(0, 140, 70) or Color3.fromRGB(50, 50, 50)
-    end)
-    return btn
-end
-
-local function createColorPicker(label, settingKey, parent)
-    local container = Instance.new("Frame", parent)
-    container.Size = UDim2.new(1, -10, 0, 55)
-    container.BackgroundTransparency = 1
+-- Функции создания элементов
+local function createToggle(name, key, parent)
+    local frame = Instance.new("Frame", parent)
+    frame.Size = UDim2.new(1, -15, 0, 45)
+    frame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
     
-    local txt = Instance.new("TextLabel", container)
+    local label = Instance.new("TextLabel", frame)
+    label.Size = UDim2.new(1, -70, 1, 0)
+    label.Position = UDim2.new(0, 15, 0, 0)
+    label.Text = name
+    label.TextColor3 = Color3.fromRGB(230, 230, 230)
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 15
+    
+    local toggleBtn = Instance.new("TextButton", frame)
+    toggleBtn.Size = UDim2.new(0, 44, 0, 22)
+    toggleBtn.Position = UDim2.new(1, -55, 0.5, -11)
+    toggleBtn.BackgroundColor3 = settings[key] and settings.accent or Color3.fromRGB(45, 45, 45)
+    toggleBtn.Text = ""
+    Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
+    
+    local circle = Instance.new("Frame", toggleBtn)
+    circle.Size = UDim2.new(0, 18, 0, 18)
+    circle.Position = settings[key] and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)
+    circle.BackgroundColor3 = Color3.new(1, 1, 1)
+    Instance.new("UICorner", circle).CornerRadius = UDim.new(1, 0)
+    
+    toggleBtn.MouseButton1Click:Connect(function()
+        settings[key] = not settings[key]
+        local targetPos = settings[key] and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)
+        local targetColor = settings[key] and settings.accent or Color3.fromRGB(45, 45, 45)
+        tweenService:Create(circle, TweenInfo.new(0.2), {Position = targetPos}):Play()
+        tweenService:Create(toggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = targetColor}):Play()
+        
+        -- Специфическая проверка для Watermark
+        if key == "watermarkEnabled" then updateWatermarkVisual() end
+    end)
+end
+
+local function createSlider(name, key, min, max, parent)
+    local frame = Instance.new("Frame", parent)
+    frame.Size = UDim2.new(1, -15, 0, 55)
+    frame.BackgroundTransparency = 1
+    local label = Instance.new("TextLabel", frame)
+    label.Size = UDim2.new(1, 0, 0, 20)
+    label.Text = name .. ": " .. settings[key]
+    label.TextColor3 = Color3.fromRGB(200, 200, 200)
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 14
+    local sliderBg = Instance.new("Frame", frame)
+    sliderBg.Size = UDim2.new(1, 0, 0, 6)
+    sliderBg.Position = UDim2.new(0, 0, 0, 30)
+    sliderBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    Instance.new("UICorner", sliderBg)
+    local fill = Instance.new("Frame", sliderBg)
+    fill.Size = UDim2.new((settings[key] - min) / (max - min), 0, 1, 0)
+    fill.BackgroundColor3 = settings.accent
+    Instance.new("UICorner", fill)
+    local function update(input)
+        local pos = math.clamp((input.Position.X - sliderBg.AbsolutePosition.X) / sliderBg.AbsoluteSize.X, 0, 1)
+        local val = math.floor(min + (max - min) * pos)
+        settings[key] = val
+        label.Text = name .. ": " .. val
+        fill.Size = UDim2.new(pos, 0, 1, 0)
+        if key == "watermarkSize" then updateWatermarkVisual() end
+    end
+    local dragging = false
+    sliderBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true update(input) end end)
+    userInputService.InputChanged:Connect(function(input) if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then update(input) end end)
+    userInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
+end
+
+local function createColorPicker(label, key, parent)
+    local frame = Instance.new("Frame", parent)
+    frame.Size = UDim2.new(1, -15, 0, 60)
+    frame.BackgroundTransparency = 1
+    local txt = Instance.new("TextLabel", frame)
     txt.Size = UDim2.new(1, 0, 0, 20)
     txt.Text = label
-    txt.TextColor3 = Color3.new(0.8, 0.8, 0.8)
-    txt.BackgroundTransparency = 1
+    txt.TextColor3 = Color3.fromRGB(200, 200, 200)
     txt.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local colors = {
-        Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 0, 0), Color3.fromRGB(0, 255, 0),
-        Color3.fromRGB(0, 255, 255), Color3.fromRGB(255, 255, 0), Color3.fromRGB(170, 0, 255)
-    }
-    
-    for i, color in ipairs(colors) do
-        local cBtn = Instance.new("TextButton", container)
-        cBtn.Size = UDim2.new(0, 35, 0, 25)
-        cBtn.Position = UDim2.new(0, (i-1)*40, 0, 22)
-        cBtn.BackgroundColor3 = color
-        cBtn.Text = ""
-        Instance.new("UICorner", cBtn).CornerRadius = UDim.new(0, 4)
-        cBtn.MouseButton1Click:Connect(function() settings[settingKey] = color end)
+    txt.BackgroundTransparency = 1
+    txt.Font = Enum.Font.Gotham
+    txt.TextSize = 14
+    local container = Instance.new("Frame", frame)
+    container.Size = UDim2.new(1, 0, 0, 35)
+    container.Position = UDim2.new(0, 0, 0, 25)
+    container.BackgroundTransparency = 1
+    local layout = Instance.new("UIListLayout", container)
+    layout.FillDirection = Enum.FillDirection.Horizontal
+    layout.Padding = UDim.new(0, 8)
+    local colors = {Color3.new(1,1,1), Color3.new(1,0,0), Color3.new(0,1,0), Color3.new(0,1,1), Color3.new(1,1,0), Color3.fromRGB(170, 0, 255)}
+    for _, color in ipairs(colors) do
+        local btn = Instance.new("TextButton", container)
+        btn.Size = UDim2.new(0, 30, 0, 30)
+        btn.BackgroundColor3 = color
+        btn.Text = ""
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+        btn.MouseButton1Click:Connect(function() settings[key] = color end)
     end
 end
 
--- Отрисовка вкладок
-local function showTab(tabName)
-    settings.currentTab = tabName
-    clearContent()
-
-    if tabName == "Visuals" then
-        createToggle("ESP Boxes", "espBoxes", contentFrame)
-        createToggle("ESP Names", "espNames", contentFrame)
-        createToggle("Health Bar", "espHealth", contentFrame)
-        createToggle("Team Check", "teamCheck", contentFrame)
+local function updateMenu()
+    for _, v in pairs(contentArea:GetChildren()) do if not v:IsA("UIListLayout") then v:Destroy() end end
+    if settings.currentTab == "Visuals" then
+        createToggle("ESP Boxes", "espBoxes", contentArea)
+        createToggle("ESP Names", "espNames", contentArea)
+        createToggle("Health Bar", "espHealth", contentArea)
+        createToggle("Team Check", "teamCheck", contentArea)
+        createToggle("Watermark", "watermarkEnabled", contentArea)
+        createSlider("Watermark Width", "watermarkSize", 150, 500, contentArea)
+        createColorPicker("Visible Enemy Color:", "colorVisible", contentArea)
+        createColorPicker("Hidden Enemy Color:", "colorHidden", contentArea)
+        createColorPicker("Ally Color:", "colorAlly", contentArea)
+    elseif settings.currentTab == "Movement" then
+        createToggle("Fly", "flyEnabled", contentArea)
+        createSlider("Fly Speed", "flySpeed", 1, 100, contentArea)
+        createToggle("NoClip", "noClipEnabled", contentArea)
+    elseif settings.currentTab == "Misc" then
+        local save = Instance.new("TextButton", contentArea)
+        save.Size = UDim2.new(1, -15, 0, 40)
+        save.BackgroundColor3 = Color3.fromRGB(30, 100, 30)
+        save.Text = "Save Config"
+        save.TextColor3 = Color3.new(1,1,1)
+        save.Font = Enum.Font.GothamBold
+        Instance.new("UICorner", save)
+        save.MouseButton1Click:Connect(function() if writefile then writefile(settings.configName, httpService:JSONEncode(settings )) end end)
         
-        Instance.new("Frame", contentFrame).Size = UDim2.new(1,0,0,5) -- Разделитель
-        
-        createColorPicker("Visible Enemy Color:", "colorVisible", contentFrame)
-        createColorPicker("Hidden Enemy Color:", "colorHidden", contentFrame)
-        createColorPicker("Ally Color:", "colorAlly", contentFrame)
-        
-    elseif tabName == "Movement" then
-        createToggle("NoClip", "noClipEnabled", contentFrame)
-        createToggle("Fly", "flyEnabled", contentFrame)
-        
-        local speedTxt = Instance.new("TextLabel", contentFrame)
-        speedTxt.Size = UDim2.new(1, -10, 0, 30)
-        speedTxt.Text = "Fly Speed: " .. settings.flySpeed
-        speedTxt.TextColor3 = Color3.new(1,1,1)
-        speedTxt.BackgroundTransparency = 1
-        
-    elseif tabName == "Config" then
-        local saveBtn = Instance.new("TextButton", contentFrame)
-        saveBtn.Size = UDim2.new(1, -10, 0, 40)
-        saveBtn.Text = "SAVE CONFIG"
-        saveBtn.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
-        saveBtn.TextColor3 = Color3.new(1, 1, 1)
-        saveBtn.MouseButton1Click:Connect(function()
-            if writefile then
-                local data = httpService:JSONEncode(settings )
-                writefile(settings.configName, data)
-                saveBtn.Text = "SAVED!"
-                wait(1) saveBtn.Text = "SAVE CONFIG"
-            end
+        local unload = Instance.new("TextButton", contentArea)
+        unload.Size = UDim2.new(1, -15, 0, 40)
+        unload.BackgroundColor3 = Color3.fromRGB(100, 30, 30)
+        unload.Text = "Unload Script"
+        unload.TextColor3 = Color3.new(1,1,1)
+        unload.Font = Enum.Font.GothamBold
+        Instance.new("UICorner", unload)
+        unload.MouseButton1Click:Connect(function() 
+            settings.active = false
+            screenGui:Destroy() watermarkGui:Destroy()
+            for _, obj in pairs(espObjects) do pcall(function() obj.Highlight:Destroy() obj.Billboard:Destroy() end) end
         end)
-
-        local loadBtn = Instance.new("TextButton", contentFrame)
-        loadBtn.Size = UDim2.new(1, -10, 0, 40)
-        loadBtn.Text = "LOAD CONFIG"
-        loadBtn.BackgroundColor3 = Color3.fromRGB(100, 0, 200)
-        loadBtn.TextColor3 = Color3.new(1, 1, 1)
-        loadBtn.MouseButton1Click:Connect(function()
-            if isfile and isfile(settings.configName) then
-                local data = httpService:JSONDecode(readfile(settings.configName ))
-                for k, v in pairs(data) do settings[k] = v end
-                showTab("Config")
-            end
-        end)
-        
-        local unloadBtn = Instance.new("TextButton", contentFrame)
-        unloadBtn.Size = UDim2.new(1, -10, 0, 40)
-        unloadBtn.Text = "UNLOAD SCRIPT"
-        unloadBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-        unloadBtn.TextColor3 = Color3.new(1, 1, 1)
-        unloadBtn.MouseButton1Click:Connect(function() screenGui:Destroy() settings.active = false end)
     end
 end
 
--- Создание кнопок вкладок
-local tabs = {"Visuals", "Movement", "Config"}
-for i, name in ipairs(tabs) do
-    local btn = Instance.new("TextButton", tabHolder)
-    btn.Size = UDim2.new(1, -10, 0, 40)
-    btn.Position = UDim2.new(0, 5, 0, (i-1)*45 + 10)
+local function createTab(name)
+    local btn = Instance.new("TextButton", tabContainer)
+    btn.Size = UDim2.new(0.85, 0, 0, 40)
+    btn.BackgroundColor3 = settings.currentTab == name and settings.accent or Color3.fromRGB(25, 25, 25)
     btn.Text = name
-    btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    btn.TextColor3 = Color3.new(1, 1, 1)
-    btn.Font = Enum.Font.SourceSansBold
-    Instance.new("UICorner", btn)
-    btn.MouseButton1Click:Connect(function() showTab(name) end)
+    btn.TextColor3 = settings.currentTab == name and Color3.new(1, 1, 1) or Color3.fromRGB(150, 150, 150)
+    btn.Font = Enum.Font.GothamSemibold
+    btn.TextSize = 14
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    
+    btn.MouseButton1Click:Connect(function()
+        settings.currentTab = name
+        for _, v in pairs(tabContainer:GetChildren()) do
+            if v:IsA("TextButton") then
+                local isCurrent = (v.Text == settings.currentTab)
+                tweenService:Create(v, TweenInfo.new(0.3), {BackgroundColor3 = isCurrent and settings.accent or Color3.fromRGB(25, 25, 25), TextColor3 = isCurrent and Color3.new(1, 1, 1) or Color3.fromRGB(150, 150, 150)}):Play()
+            end
+        end
+        updateMenu()
+    end)
 end
 
-showTab("Visuals")
+createTab("Visuals")
+createTab("Movement")
+createTab("Misc")
+updateMenu()
 
 -- ==========================================
--- 2. ЛОГИКА (Movement & ESP)
+-- 3. ЛОГИКА ESP И MOVEMENT (ОПТИМИЗИРОВАННАЯ)
 -- ==========================================
-
--- Проверка видимости
 local function checkVisibility(targetChar)
     local myChar = player.Character
     if not myChar or not myChar:FindFirstChild("Head") or not targetChar:FindFirstChild("HumanoidRootPart") then return false end
@@ -213,16 +331,73 @@ local function checkVisibility(targetChar)
     return result == nil
 end
 
--- NoClip Logic
-runService.Stepped:Connect(function()
-    if settings.noClipEnabled and player.Character then
-        for _, part in pairs(player.Character:GetDescendants()) do
-            if part:IsA("BasePart") then part.CanCollide = false end
-        end
+local function createEsp(targetPlayer)
+    if targetPlayer == player then return end
+    local function setup(character)
+        if not character then return end
+        task.defer(function()
+            local head = character:WaitForChild("Head", 10)
+            local hum = character:WaitForChild("Humanoid", 10)
+            if not head or not hum then return end
+            if espObjects[targetPlayer] then pcall(function() espObjects[targetPlayer].Highlight:Destroy() espObjects[targetPlayer].Billboard:Destroy() end) end
+            local highlight = Instance.new("Highlight", character)
+            highlight.FillTransparency = 0.5
+            highlight.Enabled = false
+            local billboard = Instance.new("BillboardGui", head)
+            billboard.Size = UDim2.new(0, 200, 0, 60)
+            billboard.AlwaysOnTop = true
+            billboard.StudsOffset = Vector3.new(0, 3, 0)
+            billboard.Enabled = false
+            local healthBg = Instance.new("Frame", billboard)
+            healthBg.Size = UDim2.new(0, 60, 0, 6)
+            healthBg.Position = UDim2.new(0.5, -30, 0, 0)
+            healthBg.BackgroundColor3 = Color3.new(0, 0, 0)
+            local healthMain = Instance.new("Frame", healthBg)
+            healthMain.Size = UDim2.new(1, 0, 1, 0)
+            healthMain.BackgroundColor3 = Color3.new(0, 1, 0)
+            local label = Instance.new("TextLabel", billboard)
+            label.Size = UDim2.new(1, 0, 0, 20)
+            label.Position = UDim2.new(0, 0, 0, 10)
+            label.BackgroundTransparency = 1
+            label.TextColor3 = Color3.new(1, 1, 1)
+            label.TextSize = 14
+            label.Font = Enum.Font.SourceSansBold
+            label.TextStrokeTransparency = 0.5
+            label.Text = ""
+            espObjects[targetPlayer] = { Highlight = highlight, Billboard = billboard, HealthBar = healthMain, Label = label, Char = character }
+        end)
+    end
+    targetPlayer.CharacterAdded:Connect(setup)
+    if targetPlayer.Character then setup(targetPlayer.Character) end
+end
+
+task.spawn(function() for _, p in pairs(players:GetPlayers()) do createEsp(p) task.wait(0.05) end end)
+players.PlayerAdded:Connect(createEsp)
+
+runService.RenderStepped:Connect(function()
+    if not settings.active then return end
+    for targetPlayer, obj in pairs(espObjects) do
+        local hum = obj.Char:FindFirstChild("Humanoid")
+        local root = obj.Char:FindFirstChild("HumanoidRootPart")
+        if hum and root and hum.Health > 0 then
+            local isAlly = (targetPlayer.Team == player.Team)
+            local finalColor = settings.colorHidden
+            if settings.teamCheck and isAlly then finalColor = settings.colorAlly
+            else finalColor = checkVisibility(obj.Char) and settings.colorVisible or settings.colorHidden end
+            obj.Highlight.Enabled = settings.espBoxes
+            obj.Highlight.FillColor = finalColor
+            obj.Billboard.Enabled = (settings.espNames or settings.espHealth)
+            obj.HealthBar.Parent.Visible = settings.espHealth
+            obj.HealthBar.Size = UDim2.new(hum.Health / hum.MaxHealth, 0, 1, 0)
+            if settings.espNames then
+                local dist = math.floor((root.Position - player.Character.HumanoidRootPart.Position).Magnitude)
+                obj.Label.Text = targetPlayer.Name .. " [" .. dist .. "s]"
+                obj.Label.TextColor3 = finalColor
+            else obj.Label.Text = "" end
+        else obj.Highlight.Enabled = false obj.Billboard.Enabled = false end
     end
 end)
 
--- Fly Logic
 local bodyVelocity, bodyGyro
 runService.RenderStepped:Connect(function()
     if settings.flyEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
@@ -234,89 +409,27 @@ runService.RenderStepped:Connect(function()
             bodyGyro.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
         end
         local moveDir = Vector3.new(0,0,0)
-        if userInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + workspace.CurrentCamera.CFrame.LookVector end
-        if userInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - workspace.CurrentCamera.CFrame.LookVector end
-        if userInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - workspace.CurrentCamera.CFrame.LookVector.Unit:Cross(Vector3.new(0,1,0)) end
-        if userInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + workspace.CurrentCamera.CFrame.LookVector.Unit:Cross(Vector3.new(0,1,0)) end
+        local cam = workspace.CurrentCamera.CFrame
+        if userInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + cam.LookVector end
+        if userInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - cam.LookVector end
+        if userInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - cam.RightVector end
+        if userInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + cam.RightVector end
         if userInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0,1,0) end
         if userInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir - Vector3.new(0,1,0) end
         bodyVelocity.Velocity = moveDir * settings.flySpeed
-        bodyGyro.CFrame = workspace.CurrentCamera.CFrame
+        bodyGyro.CFrame = cam
     else
         if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
         if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
     end
 end)
 
--- ESP & Health Bar
-local function createEsp(targetPlayer)
-    if targetPlayer == player then return end
-    local function setup(character)
-        if not settings.active then return end
-        local head = character:WaitForChild("Head", 5)
-        local highlight = Instance.new("Highlight", character)
-        highlight.FillTransparency = 0.6
-        
-        local billboard = Instance.new("BillboardGui", head or character:WaitForChild("HumanoidRootPart"))
-        billboard.Size = UDim2.new(0, 200, 0, 50)
-        billboard.AlwaysOnTop = true
-        billboard.StudsOffset = Vector3.new(0, 3, 0)
-        
-        local healthBg = Instance.new("Frame", billboard)
-        healthBg.Size = UDim2.new(0, 50, 0, 4)
-        healthBg.Position = UDim2.new(0.5, -25, 0, -5)
-        healthBg.BackgroundColor3 = Color3.new(0, 0, 0)
-        local healthMain = Instance.new("Frame", healthBg)
-        healthMain.Size = UDim2.new(1, 0, 1, 0)
-        healthMain.BackgroundColor3 = Color3.new(0, 1, 0)
-        healthMain.BorderSizePixel = 0
-        
-        local label = Instance.new("TextLabel", billboard)
-        label.Size = UDim2.new(1, 0, 1, 0)
-        label.BackgroundTransparency = 1
-        label.TextColor3 = Color3.new(1, 1, 1)
-        label.TextStrokeTransparency = 0.5
-        label.Font = Enum.Font.SourceSansBold
-
-        espObjects[targetPlayer] = { Highlight = highlight, Billboard = billboard, HealthBar = healthMain, Label = label, Char = character }
-    end
-    targetPlayer.CharacterAdded:Connect(setup)
-    if targetPlayer.Character then setup(targetPlayer.Character) end
-end
-
-players.PlayerAdded:Connect(createEsp)
-for _, p in pairs(players:GetPlayers()) do createEsp(p) end
-
-runService.RenderStepped:Connect(function()
-    if not settings.active then return end
-    for targetPlayer, obj in pairs(espObjects) do
-        local hum = obj.Char:FindFirstChild("Humanoid")
-        local root = obj.Char:FindFirstChild("HumanoidRootPart")
-        if hum and root and hum.Health > 0 then
-            local isAlly = (targetPlayer.Team == player.Team)
-            local finalColor = settings.colorHidden
-            if settings.teamCheck and isAlly then
-                finalColor = settings.colorAlly
-            else
-                finalColor = checkVisibility(obj.Char) and settings.colorVisible or settings.colorHidden
-            end
-
-            obj.Highlight.Enabled = settings.espBoxes
-            obj.Highlight.FillColor = finalColor
-            obj.Billboard.Enabled = settings.espNames or settings.espHealth
-            obj.HealthBar.Parent.Visible = settings.espHealth
-            obj.HealthBar.Size = UDim2.new(hum.Health / hum.MaxHealth, 0, 1, 0)
-            obj.Label.TextColor3 = finalColor
-            local dist = math.floor((root.Position - player.Character.HumanoidRootPart.Position).Magnitude)
-            obj.Label.Text = settings.espNames and targetPlayer.Name .. " [" .. dist .. "s]" or ""
-        else
-            obj.Highlight.Enabled = false
-            obj.Billboard.Enabled = false
-        end
+runService.Stepped:Connect(function()
+    if settings.noClipEnabled and player.Character then
+        for _, part in pairs(player.Character:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
     end
 end)
 
--- Insert to Hide
 userInputService.InputBegan:Connect(function(input, gp)
     if not gp and input.KeyCode == Enum.KeyCode.Insert then
         settings.menuVisible = not settings.menuVisible
