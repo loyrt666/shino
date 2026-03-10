@@ -1,4 +1,4 @@
--- [[ SHINO V3.3: WATERMARK FIX ]] --
+-- [[ SHINO V 4.1 ]] --
 local player = game.Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local userInputService = game:GetService("UserInputService")
@@ -40,14 +40,15 @@ local settings = {
 
     -- Anti-AFK
     antiAfkEnabled = false,
+    keybindsEnabled = true,
 
     -- Keybinds (example, will be dynamic)
     keybinds = {
-        toggleMenu = Enum.KeyCode.Insert,
-        toggleFly = Enum.KeyCode.F,
-        toggleNoClip = Enum.KeyCode.G,
-        toggleInfiniteJump = Enum.KeyCode.Space,
-        toggleAntiAfk = Enum.KeyCode.K,
+        toggleMenu = nil,
+        toggleFly = nil,
+        toggleNoClip = nil,
+        toggleInfiniteJump = nil,
+        toggleAntiAfk = nil,
     },
 
     
@@ -274,7 +275,7 @@ local function createKeybind(name, key, parent)
     keybindBtn.Size = UDim2.new(0, 60, 0, 22)
     keybindBtn.Position = UDim2.new(1, -75, 0.5, -11)
     keybindBtn.BackgroundColor3 = settings.toggleButtonColor
-    keybindBtn.Text = settings.keybinds[key].Name
+    keybindBtn.Text = settings.keybinds[key] and settings.keybinds[key].Name or "None"
     keybindBtn.TextColor3 = settings.menuTextColor
     Instance.new("UICorner", keybindBtn).CornerRadius = UDim.new(0, settings.menuButtonCornerRadius)
 
@@ -287,8 +288,13 @@ local function createKeybind(name, key, parent)
         inputConnection = userInputService.InputBegan:Connect(function(input, gp)
             if gp then return end
             if input.UserInputType == Enum.UserInputType.Keyboard then
-                settings.keybinds[key] = input.KeyCode
-                keybindBtn.Text = input.KeyCode.Name
+                if input.KeyCode == Enum.KeyCode.Backspace then
+                    settings.keybinds[key] = nil
+                    keybindBtn.Text = "None"
+                else
+                    settings.keybinds[key] = input.KeyCode
+                    keybindBtn.Text = input.KeyCode.Name
+                end
                 waitingForKey = false
                 inputConnection:Disconnect()
             end
@@ -379,6 +385,7 @@ local function updateMenu()
             end
         end
     elseif settings.currentTab == "Keybinds" then
+        createToggle("Enable Keybinds", "keybindsEnabled", contentArea)
         createKeybind("Toggle Menu", "toggleMenu", contentArea)
         createKeybind("Toggle Fly", "toggleFly", contentArea)
         createKeybind("Toggle NoClip", "toggleNoClip", contentArea)
@@ -543,13 +550,7 @@ runService.RenderStepped:Connect(function()
         if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
     end
 
-    -- Infinite Jump
-    if settings.infiniteJumpEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
-        local hum = player.Character.Humanoid
-        if hum:GetState() == Enum.HumanoidStateType.Freefall then
-            hum:ChangeState(Enum.HumanoidStateType.Jumping)
-        end
-    end
+
 
     -- WalkSpeed and JumpPower
     if player.Character and player.Character:FindFirstChild("Humanoid") then
@@ -558,38 +559,58 @@ runService.RenderStepped:Connect(function()
     end
 end)
 
-runService.Stepped:Connect(function()
-    if settings.noClipEnabled and player.Character then
-        for _, part in pairs(player.Character:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
-    end
-
-    -- Anti-AFK
-    if settings.antiAfkEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
-        local hum = player.Character.Humanoid
-        if hum.Health > 0 and hum:GetState() == Enum.HumanoidStateType.Running then
-            -- Simulate small movement to prevent AFK kick
-            local currentPos = player.Character.HumanoidRootPart.Position
-            player.Character.HumanoidRootPart.CFrame = CFrame.new(currentPos + Vector3.new(0.01, 0, 0))
-            task.wait(0.1)
-            player.Character.HumanoidRootPart.CFrame = CFrame.new(currentPos)
+task.spawn(function()
+    while task.wait() do
+        if not settings.active then break end
+        if settings.infiniteJumpEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
+            local hum = player.Character.Humanoid
+            if hum:GetState() == Enum.HumanoidStateType.Freefall then
+                hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
         end
     end
 end)
 
+runService.Stepped:Connect(function()
+    if settings.noClipEnabled and player.Character then
+        for _, part in pairs(player.Character:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
+    end
+end)
+
+task.spawn(function()
+    while task.wait(5) do -- Check every 5 seconds
+        if not settings.active then break end
+        if settings.antiAfkEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
+            local hum = player.Character.Humanoid
+            if hum.Health > 0 and hum:GetState() == Enum.HumanoidStateType.Running then
+                -- Simulate small movement to prevent AFK kick
+                local currentPos = player.Character.HumanoidRootPart.Position
+                player.Character.HumanoidRootPart.CFrame = CFrame.new(currentPos + Vector3.new(0.01, 0, 0))
+                task.wait(0.1)
+                player.Character.HumanoidRootPart.CFrame = CFrame.new(currentPos)
+            end
+        end
+    end
+
+
+
+end)
+
 userInputService.InputBegan:Connect(function(input, gp)
-    if not gp and input.KeyCode == settings.keybinds.toggleMenu then
+    if not settings.keybindsEnabled then return end
+    if not gp and settings.keybinds.toggleMenu and input.KeyCode == settings.keybinds.toggleMenu then
         settings.menuVisible = not settings.menuVisible
         mainFrame.Visible = settings.menuVisible
-    elseif not gp and input.KeyCode == settings.keybinds.toggleFly then
+    elseif not gp and settings.keybinds.toggleFly and input.KeyCode == settings.keybinds.toggleFly then
         settings.flyEnabled = not settings.flyEnabled
         updateMenu() -- Refresh menu to show toggle state
-    elseif not gp and input.KeyCode == settings.keybinds.toggleNoClip then
+    elseif not gp and settings.keybinds.toggleNoClip and input.KeyCode == settings.keybinds.toggleNoClip then
         settings.noClipEnabled = not settings.noClipEnabled
         updateMenu() -- Refresh menu to show toggle state
-    elseif not gp and input.KeyCode == settings.keybinds.toggleInfiniteJump then
+    elseif not gp and settings.keybinds.toggleInfiniteJump and input.KeyCode == settings.keybinds.toggleInfiniteJump then
         settings.infiniteJumpEnabled = not settings.infiniteJumpEnabled
         updateMenu() -- Refresh menu to show toggle state
-    elseif not gp and input.KeyCode == settings.keybinds.toggleAntiAfk then
+    elseif not gp and settings.keybinds.toggleAntiAfk and input.KeyCode == settings.keybinds.toggleAntiAfk then
         settings.antiAfkEnabled = not settings.antiAfkEnabled
         updateMenu() -- Refresh menu to show toggle state
     end
