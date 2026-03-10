@@ -4,224 +4,244 @@ local playerGui = player:WaitForChild("PlayerGui")
 local userInputService = game:GetService("UserInputService")
 local runService = game:GetService("RunService")
 local players = game:GetService("Players")
+local httpService = game:GetService("HttpService" )
 
--- Состояние функций и цветов
+-- Состояние функций
 local settings = {
-    active = true, -- Флаг работы скрипта
+    active = true,
     menuVisible = true,
+    currentTab = "Visuals",
+    
+    -- Visuals
     espBoxes = false,
     espNames = false,
+    espHealth = false,
     teamCheck = true,
+    colorVisible = Color3.fromRGB(255, 255, 255),
+    colorHidden = Color3.fromRGB(170, 0, 255),
+    colorAlly = Color3.fromRGB(0, 255, 120),
     
-    -- Настраиваемые цвета
-    colorVisible = Color3.fromRGB(255, 255, 255), -- Белый
-    colorHidden = Color3.fromRGB(170, 0, 255),    -- Фиолетовый
-    colorAlly = Color3.fromRGB(0, 255, 120)       -- Зеленый
+    -- Movement
+    flyEnabled = false,
+    flySpeed = 50,
+    noClipEnabled = false,
+    
+    -- Config
+    configName = "ShinoConfig.json"
 }
 
 local espObjects = {}
-local connections = {} -- Для хранения событий
+local connections = {}
 
 -- ==========================================
--- 1. ИНТЕРФЕЙС (UI)
+-- 1. ИНТЕРФЕЙС (UI с вкладками)
 -- ==========================================
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "RobloxMaster_SHINO"
+local screenGui = Instance.new("ScreenGui", playerGui)
+screenGui.Name = "ShinoPremiumMenu"
 screenGui.ResetOnSpawn = false
-screenGui.Parent = playerGui
 
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 320, 0, 460) -- Увеличил высоту для новой кнопки
-mainFrame.Position = UDim2.new(0.5, -160, 0.5, -230)
-mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+local mainFrame = Instance.new("Frame", screenGui)
+mainFrame.Size = UDim2.new(0, 400, 0, 350)
+mainFrame.Position = UDim2.new(0.5, -200, 0.5, -175)
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 mainFrame.Active = true
 mainFrame.Draggable = true
-mainFrame.Parent = screenGui
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
 
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 40)
-title.BackgroundTransparency = 1
-title.Text = "SHINO MENU [Insert]"
-title.TextColor3 = Color3.new(1, 1, 1)
-title.TextSize = 16
-title.Font = Enum.Font.SourceSansBold
-title.Parent = mainFrame
+-- Боковая панель вкладок
+local tabHolder = Instance.new("Frame", mainFrame)
+tabHolder.Size = UDim2.new(0, 100, 1, 0)
+tabHolder.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+Instance.new("UICorner", tabHolder).CornerRadius = UDim.new(0, 10)
 
--- Функция создания переключателя
-local function createToggle(name, settingKey, position)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 280, 0, 35)
-    btn.Position = position
+-- Контейнер для контента
+local contentFrame = Instance.new("Frame", mainFrame)
+contentFrame.Size = UDim2.new(1, -110, 1, -10)
+contentFrame.Position = UDim2.new(0, 105, 0, 5)
+contentFrame.BackgroundTransparency = 1
+
+local function clearContent()
+    for _, child in pairs(contentFrame:GetChildren()) do child:Destroy() end
+end
+
+-- Вспомогательные функции UI
+local function createToggle(name, settingKey, parent)
+    local btn = Instance.new("TextButton", parent)
+    btn.Size = UDim2.new(1, 0, 0, 35)
     btn.BackgroundColor3 = settings[settingKey] and Color3.fromRGB(0, 140, 70) or Color3.fromRGB(50, 50, 50)
     btn.Text = name .. ": " .. (settings[settingKey] and "ON" or "OFF")
     btn.TextColor3 = Color3.new(1, 1, 1)
-    btn.Parent = mainFrame
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 5)
-
     btn.MouseButton1Click:Connect(function()
         settings[settingKey] = not settings[settingKey]
         btn.Text = name .. ": " .. (settings[settingKey] and "ON" or "OFF")
         btn.BackgroundColor3 = settings[settingKey] and Color3.fromRGB(0, 140, 70) or Color3.fromRGB(50, 50, 50)
     end)
+    return btn
 end
 
--- Функция создания выбора цвета
-local function createColorPicker(label, settingKey, position, colors)
-    local labelObj = Instance.new("TextLabel")
-    labelObj.Size = UDim2.new(0, 280, 0, 20)
-    labelObj.Position = position
-    labelObj.BackgroundTransparency = 1
-    labelObj.Text = label
-    labelObj.TextColor3 = Color3.fromRGB(200, 200, 200)
-    labelObj.TextSize = 14
-    labelObj.Parent = mainFrame
+-- Отрисовка вкладок
+local function showTab(tabName)
+    settings.currentTab = tabName
+    clearContent()
+    local layout = Instance.new("UIListLayout", contentFrame)
+    layout.Padding = UDim.new(0, 5)
 
-    for i, color in ipairs(colors) do
-        local colorBtn = Instance.new("TextButton")
-        colorBtn.Size = UDim2.new(0, 40, 0, 25)
-        colorBtn.Position = position + UDim2.new(0, (i-1)*45, 0, 25)
-        colorBtn.BackgroundColor3 = color
-        colorBtn.Text = ""
-        colorBtn.Parent = mainFrame
-        Instance.new("UICorner", colorBtn).CornerRadius = UDim.new(0, 4)
-
-        colorBtn.MouseButton1Click:Connect(function()
-            settings[settingKey] = color
+    if tabName == "Visuals" then
+        createToggle("ESP Boxes", "espBoxes", contentFrame)
+        createToggle("ESP Names", "espNames", contentFrame)
+        createToggle("Health Bar", "espHealth", contentFrame)
+        createToggle("Team Check", "teamCheck", contentFrame)
+    elseif tabName == "Movement" then
+        createToggle("NoClip", "noClipEnabled", contentFrame)
+        createToggle("Fly", "flyEnabled", contentFrame)
+    elseif tabName == "Config" then
+        local saveBtn = Instance.new("TextButton", contentFrame)
+        saveBtn.Size = UDim2.new(1, 0, 0, 40)
+        saveBtn.Text = "SAVE CONFIG"
+        saveBtn.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
+        saveBtn.TextColor3 = Color3.new(1, 1, 1)
+        saveBtn.MouseButton1Click:Connect(function()
+            local data = httpService:JSONEncode(settings )
+            writefile(settings.configName, data)
+            saveBtn.Text = "SAVED!"
+            wait(1) saveBtn.Text = "SAVE CONFIG"
         end)
+
+        local loadBtn = Instance.new("TextButton", contentFrame)
+        loadBtn.Size = UDim2.new(1, 0, 0, 40)
+        loadBtn.Text = "LOAD CONFIG"
+        loadBtn.BackgroundColor3 = Color3.fromRGB(100, 0, 200)
+        loadBtn.TextColor3 = Color3.new(1, 1, 1)
+        loadBtn.MouseButton1Click:Connect(function()
+            if isfile(settings.configName) then
+                local data = httpService:JSONDecode(readfile(settings.configName ))
+                for k, v in pairs(data) do settings[k] = v end
+                showTab("Config")
+            end
+        end)
+        
+        local unloadBtn = Instance.new("TextButton", contentFrame)
+        unloadBtn.Size = UDim2.new(1, 0, 0, 40)
+        unloadBtn.Text = "UNLOAD SCRIPT"
+        unloadBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+        unloadBtn.TextColor3 = Color3.new(1, 1, 1)
+        unloadBtn.MouseButton1Click:Connect(function() screenGui:Destroy() settings.active = false end)
     end
 end
 
--- Кнопка ВЫГРУЗКИ (Unload)
-local unloadBtn = Instance.new("TextButton")
-unloadBtn.Size = UDim2.new(0, 280, 0, 40)
-unloadBtn.Position = UDim2.new(0, 20, 0, 400)
-unloadBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-unloadBtn.Text = "UNLOAD SCRIPT"
-unloadBtn.TextColor3 = Color3.new(1, 1, 1)
-unloadBtn.Font = Enum.Font.SourceSansBold
-unloadBtn.Parent = mainFrame
-Instance.new("UICorner", unloadBtn).CornerRadius = UDim.new(0, 5)
-
--- Настройки
-createToggle("ESP Boxes", "espBoxes", UDim2.new(0, 20, 0, 50))
-createToggle("ESP Names", "espNames", UDim2.new(0, 20, 0, 90))
-createToggle("Team Check", "teamCheck", UDim2.new(0, 20, 0, 130))
-
-local presetColors = {
-    Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 0, 0), Color3.fromRGB(0, 255, 0),
-    Color3.fromRGB(0, 255, 255), Color3.fromRGB(255, 255, 0), Color3.fromRGB(170, 0, 255)
-}
-createColorPicker("Visible Enemy Color:", "colorVisible", UDim2.new(0, 20, 0, 180), presetColors)
-createColorPicker("Hidden Enemy Color:", "colorHidden", UDim2.new(0, 20, 0, 240), presetColors)
-createColorPicker("Ally Color:", "colorAlly", UDim2.new(0, 20, 0, 300), presetColors)
-
--- ==========================================
--- 2. ЛОГИКА ESP
--- ==========================================
-local function checkVisibility(targetChar)
-    local myChar = player.Character
-    if not myChar or not myChar:FindFirstChild("Head") or not targetChar:FindFirstChild("HumanoidRootPart") then return false end
-    local rayParams = RaycastParams.new()
-    rayParams.FilterDescendantsInstances = {myChar, targetChar}
-    rayParams.FilterType = Enum.RaycastFilterType.Exclude
-    local result = workspace:Raycast(myChar.Head.Position, targetChar.HumanoidRootPart.Position - myChar.Head.Position, rayParams)
-    return result == nil
+-- Создание кнопок вкладок
+local tabs = {"Visuals", "Movement", "Config"}
+for i, name in ipairs(tabs) do
+    local btn = Instance.new("TextButton", tabHolder)
+    btn.Size = UDim2.new(1, -10, 0, 40)
+    btn.Position = UDim2.new(0, 5, 0, (i-1)*45 + 10)
+    btn.Text = name
+    btn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    Instance.new("UICorner", btn)
+    btn.MouseButton1Click:Connect(function() showTab(name) end)
 end
 
-local function updateEsp()
-    if not settings.active then return end
-    local myChar = player.Character
-    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return end
+showTab("Visuals")
 
-    for targetPlayer, objects in pairs(espObjects) do
-        local char = targetPlayer.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        local hum = char and char:FindFirstChild("Humanoid")
+-- ==========================================
+-- 2. ЛОГИКА (Movement & ESP)
+-- ==========================================
 
-        if char and root and hum and hum.Health > 0 then
-            local isAlly = (targetPlayer.Team == player.Team)
-            local finalColor = settings.colorHidden
-            
-            if settings.teamCheck and isAlly then
-                finalColor = settings.colorAlly
-            else
-                local visible = checkVisibility(char)
-                finalColor = visible and settings.colorVisible or settings.colorHidden
-            end
-
-            objects.Highlight.Enabled = settings.espBoxes
-            objects.Highlight.FillColor = finalColor
-            objects.Highlight.OutlineColor = finalColor
-
-            objects.Billboard.Enabled = settings.espNames
-            objects.NameLabel.TextColor3 = finalColor
-            local dist = math.floor((root.Position - myChar.HumanoidRootPart.Position).Magnitude)
-            objects.NameLabel.Text = targetPlayer.Name .. " [" .. dist .. "s]"
-        else
-            objects.Highlight.Enabled = false
-            objects.Billboard.Enabled = false
+-- NoClip Logic
+runService.Stepped:Connect(function()
+    if settings.noClipEnabled and player.Character then
+        for _, part in pairs(player.Character:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide = false end
         end
     end
-end
+end)
 
+-- Fly Logic (Упрощенная)
+local bodyVelocity, bodyGyro
+runService.RenderStepped:Connect(function()
+    if settings.flyEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        local hrp = player.Character.HumanoidRootPart
+        if not bodyVelocity then
+            bodyVelocity = Instance.new("BodyVelocity", hrp)
+            bodyVelocity.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+            bodyGyro = Instance.new("BodyGyro", hrp)
+            bodyGyro.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
+            bodyGyro.CFrame = hrp.CFrame
+        end
+        
+        local moveDir = Vector3.new(0,0,0)
+        if userInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + workspace.CurrentCamera.CFrame.LookVector end
+        if userInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - workspace.CurrentCamera.CFrame.LookVector end
+        if userInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - workspace.CurrentCamera.CFrame.LookVector.Unit:Cross(Vector3.new(0,1,0)) end
+        if userInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + workspace.CurrentCamera.CFrame.LookVector.Unit:Cross(Vector3.new(0,1,0)) end
+        if userInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0,1,0) end
+        if userInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir - Vector3.new(0,1,0) end
+        
+        bodyVelocity.Velocity = moveDir * settings.flySpeed
+        bodyGyro.CFrame = workspace.CurrentCamera.CFrame
+    else
+        if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
+        if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
+    end
+end)
+
+-- ESP Health Bar Logic
 local function createEsp(targetPlayer)
     if targetPlayer == player then return end
     local function setup(character)
-        if not settings.active then return end
-        if espObjects[targetPlayer] then
-            pcall(function() espObjects[targetPlayer].Highlight:Destroy() espObjects[targetPlayer].Billboard:Destroy() end)
-        end
-        local highlight = Instance.new("Highlight", character)
-        highlight.FillTransparency = 0.6
-        highlight.Enabled = false
-        local billboard = Instance.new("BillboardGui", character:WaitForChild("Head", 5) or character:WaitForChild("HumanoidRootPart"))
+        local head = character:WaitForChild("Head", 5)
+        if not head then return end
+        
+        local billboard = Instance.new("BillboardGui", head)
         billboard.Size = UDim2.new(0, 200, 0, 50)
         billboard.AlwaysOnTop = true
         billboard.StudsOffset = Vector3.new(0, 3, 0)
-        billboard.Enabled = false
+        
+        -- Health Bar Container
+        local healthBg = Instance.new("Frame", billboard)
+        healthBg.Size = UDim2.new(0, 50, 0, 5)
+        healthBg.Position = UDim2.new(0.5, -25, 0, -10)
+        healthBg.BackgroundColor3 = Color3.new(0, 0, 0)
+        
+        local healthMain = Instance.new("Frame", healthBg)
+        healthMain.Size = UDim2.new(1, 0, 1, 0)
+        healthMain.BackgroundColor3 = Color3.new(0, 1, 0)
+        
         local label = Instance.new("TextLabel", billboard)
         label.Size = UDim2.new(1, 0, 1, 0)
         label.BackgroundTransparency = 1
-        label.TextSize = 14
-        label.Font = Enum.Font.SourceSansBold
+        label.TextColor3 = Color3.new(1, 1, 1)
         label.TextStrokeTransparency = 0.5
-        espObjects[targetPlayer] = { Highlight = highlight, Billboard = billboard, NameLabel = label }
+
+        espObjects[targetPlayer] = { Billboard = billboard, HealthBar = healthMain, Label = label, Char = character }
     end
-    table.insert(connections, targetPlayer.CharacterAdded:Connect(setup))
+    targetPlayer.CharacterAdded:Connect(setup)
     if targetPlayer.Character then setup(targetPlayer.Character) end
 end
 
--- Инициализация
-table.insert(connections, players.PlayerAdded:Connect(createEsp))
+players.PlayerAdded:Connect(createEsp)
 for _, p in pairs(players:GetPlayers()) do createEsp(p) end
-local mainLoop = runService.RenderStepped:Connect(updateEsp)
-table.insert(connections, mainLoop)
 
--- Управление клавишей Insert
-table.insert(connections, userInputService.InputBegan:Connect(function(input, gp)
+runService.RenderStepped:Connect(function()
+    for targetPlayer, obj in pairs(espObjects) do
+        local hum = obj.Char:FindFirstChild("Humanoid")
+        if hum and hum.Health > 0 then
+            obj.Billboard.Enabled = settings.espNames or settings.espHealth
+            obj.HealthBar.Parent.Visible = settings.espHealth
+            obj.HealthBar.Size = UDim2.new(hum.Health / hum.MaxHealth, 0, 1, 0)
+            obj.Label.Text = settings.espNames and targetPlayer.Name or ""
+        else
+            obj.Billboard.Enabled = false
+        end
+    end
+end)
+
+-- Insert to Hide
+userInputService.InputBegan:Connect(function(input, gp)
     if not gp and input.KeyCode == Enum.KeyCode.Insert then
         settings.menuVisible = not settings.menuVisible
         mainFrame.Visible = settings.menuVisible
     end
-end))
-
--- ЛОГИКА ВЫГРУЗКИ
-unloadBtn.MouseButton1Click:Connect(function()
-    settings.active = false
-    -- Отключаем все события
-    for _, conn in pairs(connections) do
-        if conn then conn:Disconnect() end
-    end
-    -- Удаляем интерфейс
-    screenGui:Destroy()
-    -- Удаляем все ESP объекты
-    for targetPlayer, objects in pairs(espObjects) do
-        pcall(function()
-            objects.Highlight:Destroy()
-            objects.Billboard:Destroy()
-        end)
-    end
-    espObjects = {}
-    print("Script Unloaded Successfully")
 end)
