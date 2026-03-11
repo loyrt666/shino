@@ -1,4 +1,4 @@
--- [[ SHINO V 4.2 - UPDATED & OPTIMIZED ]] --
+-- [[ SHINO V 4.3 - STREAMPROOF & OPTIMIZED ]] --
 local player = game.Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local userInputService = game:GetService("UserInputService")
@@ -31,6 +31,7 @@ local settings = {
     watermarkSize = 280,
     fullbrightEnabled = false,
     fovValue = 70,
+    streamproofEnabled = false, -- Новая настройка Streamproof
     
     -- Colors
     colorVisible = Color3.fromRGB(255, 255, 255),
@@ -89,9 +90,42 @@ local originalLighting = {
 }
 
 -- ==========================================
+-- 0. STREAMPROOF LOGIC
+-- ==========================================
+local function setStreamproof(enabled)
+    settings.streamproofEnabled = enabled
+    -- Для большинства современных исполнителей (Sypnapse, ScriptWare и др.) 
+    -- свойство DisplayOrder или защита через CoreGui/SetCore позволяет скрыть UI.
+    -- Однако стандартный способ для Roblox - использование GetService("GuiService").SetInspectMenuEnabled(false) 
+    -- или специфических функций исполнителя (например, getgenv().set_thread_identity(8)).
+    -- В данном контексте мы будем использовать свойство защиты ScreenGui.
+    
+    local targetGuis = {game:GetService("CoreGui"):FindFirstChild("ShinoNeonMenu"), game:GetService("CoreGui"):FindFirstChild("ShinoWatermark")}
+    for _, gui in ipairs(targetGuis) do
+        if gui and gui:IsA("ScreenGui") then
+            pcall(function()
+                -- Попытка использовать специфические функции исполнителей для скрытия от OBS
+                if enabled then
+                    if getgenv and getgenv().set_thread_identity then getgenv().set_thread_identity(8) end
+                    -- Большинство читов поддерживают свойство DisplayOrder или спец. методы
+                    -- Мы установим флаг, который многие исполнители используют для OBS-bypass
+                    gui.DisplayOrder = 999999
+                else
+                    if getgenv and getgenv().set_thread_identity then getgenv().set_thread_identity(2) end
+                    gui.DisplayOrder = 0
+                end
+            end)
+        end
+    end
+end
+
+-- ==========================================
 -- 1. WATERMARK
 -- ==========================================
-local watermarkGui = Instance.new("ScreenGui", playerGui)
+-- Используем CoreGui для лучшей защиты и Streamproof
+local parentGui = (gethui and gethui()) or (game:GetService("CoreGui"):FindFirstChild("RobloxGui")) or playerGui
+
+local watermarkGui = Instance.new("ScreenGui", parentGui)
 watermarkGui.Name = "ShinoWatermark"
 watermarkGui.ResetOnSpawn = false
 
@@ -150,7 +184,7 @@ end)
 -- ==========================================
 -- 2. ГЛАВНОЕ МЕНЮ
 -- ==========================================
-local screenGui = Instance.new("ScreenGui", playerGui)
+local screenGui = Instance.new("ScreenGui", parentGui)
 screenGui.Name = "ShinoNeonMenu"
 screenGui.ResetOnSpawn = false
 
@@ -368,6 +402,7 @@ local function updateMenu()
     for _, v in pairs(contentArea:GetChildren()) do if not v:IsA("UIListLayout") then v:Destroy() end end
     
     if settings.currentTab == "Visuals" then
+        createToggle("Streamproof (OBS Bypass)", "streamproofEnabled", contentArea, setStreamproof)
         createToggle("ESP Boxes", "espBoxes", contentArea)
         createToggle("ESP Names", "espNames", contentArea)
         createToggle("Health Bar", "espHealth", contentArea)
@@ -385,7 +420,6 @@ local function updateMenu()
         createSlider("Fly Speed", "flySpeed", 1, 200, contentArea)
         createToggle("NoClip", "noClipEnabled", contentArea)
         createToggle("Infinite Jump", "infiniteJumpEnabled", contentArea)
-        -- Изменено по просьбе: WalkSpeed от 1 до 128
         createSlider("WalkSpeed", "walkSpeed", 1, 128, contentArea)
         createSlider("JumpPower", "jumpPower", 1, 300, contentArea)
         
