@@ -1,4 +1,4 @@
--- [[ SHINO V 4.1 ]] --
+-- [[ SHINO V 4.2 - UPDATED & OPTIMIZED ]] --
 local player = game.Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local userInputService = game:GetService("UserInputService")
@@ -6,7 +6,14 @@ local runService = game:GetService("RunService")
 local players = game:GetService("Players")
 local stats = game:GetService("Stats")
 local tweenService = game:GetService("TweenService")
-local httpService = game:GetService("HttpService" )
+local httpService = game:GetService("HttpService")
+local lighting = game:GetService("Lighting")
+
+-- Кэширование для оптимизации
+local math_floor = math.floor
+local math_clamp = math.clamp
+local task_wait = task.wait
+local task_spawn = task.spawn
 
 -- Состояние функций
 local settings = {
@@ -22,6 +29,8 @@ local settings = {
     teamCheck = true,
     watermarkEnabled = true,
     watermarkSize = 280,
+    fullbrightEnabled = false,
+    fovValue = 70,
     
     -- Colors
     colorVisible = Color3.fromRGB(255, 255, 255),
@@ -32,29 +41,28 @@ local settings = {
     flyEnabled = false,
     flySpeed = 50,
     noClipEnabled = false,
-    
-    -- New Movement Settings
     infiniteJumpEnabled = false,
     walkSpeed = 16,
     jumpPower = 50,
 
-    -- Anti-AFK
+    -- Misc
     antiAfkEnabled = false,
+    autoClickerEnabled = false,
     keybindsEnabled = true,
 
-    -- Keybinds (example, will be dynamic)
+    -- Keybinds
     keybinds = {
-        toggleMenu = nil,
+        toggleMenu = Enum.KeyCode.RightShift,
         toggleFly = nil,
         toggleNoClip = nil,
         toggleInfiniteJump = nil,
         toggleAntiAfk = nil,
     },
-
     
     -- Config
     configName = "ShinoConfig.json",
-    -- UI Enhancements
+    
+    -- UI Theme
     menuAccentColor = Color3.fromRGB(170, 0, 255),
     menuBackgroundColor = Color3.fromRGB(15, 15, 15),
     menuSidebarColor = Color3.fromRGB(20, 20, 20),
@@ -69,13 +77,19 @@ local settings = {
     sliderBgColor = Color3.fromRGB(40, 40, 40),
     sliderFillColor = Color3.fromRGB(170, 0, 255),
     colorPickerColors = {Color3.new(1,1,1), Color3.new(1,0,0), Color3.new(0,1,0), Color3.new(0,1,1), Color3.new(1,1,0), Color3.fromRGB(170, 0, 255)},
-
 }
 
 local espObjects = {}
+local originalLighting = {
+    Brightness = lighting.Brightness,
+    ClockTime = lighting.ClockTime,
+    FogEnd = lighting.FogEnd,
+    GlobalShadows = lighting.GlobalShadows,
+    Ambient = lighting.Ambient
+}
 
 -- ==========================================
--- 1. WATERMARK (ИСПРАВЛЕННАЯ ЛОГИКА)
+-- 1. WATERMARK
 -- ==========================================
 local watermarkGui = Instance.new("ScreenGui", playerGui)
 watermarkGui.Name = "ShinoWatermark"
@@ -114,7 +128,6 @@ watermarkText.Font = Enum.Font.Code
 watermarkText.Text = "SHINO.cc"
 watermarkText.TextXAlignment = Enum.TextXAlignment.Left
 
--- ФУНКЦИЯ ОБНОВЛЕНИЯ (ВЫЗЫВАЕТСЯ ИЗ МЕНЮ И ЦИКЛА)
 local function updateWatermarkVisual()
     watermarkFrame.Visible = settings.watermarkEnabled
     watermarkFrame.Size = UDim2.new(0, settings.watermarkSize, 0, 30)
@@ -122,12 +135,12 @@ local function updateWatermarkVisual()
     watermarkFrame.Draggable = settings.menuVisible
 end
 
-task.spawn(function()
-    while task.wait(0.2) do
+task_spawn(function()
+    while task_wait(0.2) do
         if not settings.active then break end
         if settings.watermarkEnabled then
-            local fps = math.floor(stats.Network.RenderPps)
-            local ping = math.floor(player:GetNetworkPing() * 1000)
+            local fps = math_floor(stats.Network.RenderPps)
+            local ping = math_floor(player:GetNetworkPing() * 1000)
             watermarkText.Text = string.format("SHINO.cc | %s | %d FPS | %d MS", player.Name:upper(), fps, ping)
         end
         updateWatermarkVisual()
@@ -135,7 +148,7 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- 2. ГЛАВНОЕ МЕНЮ (С ИСПРАВЛЕННЫМИ КНОПКАМИ)
+-- 2. ГЛАВНОЕ МЕНЮ
 -- ==========================================
 local screenGui = Instance.new("ScreenGui", playerGui)
 screenGui.Name = "ShinoNeonMenu"
@@ -179,7 +192,7 @@ contentArea.CanvasSize = UDim2.new(0, 0, 2.5, 0)
 Instance.new("UIListLayout", contentArea).Padding = UDim.new(0, 12)
 
 -- Функции создания элементов
-local function createToggle(name, key, parent)
+local function createToggle(name, key, parent, callback)
     local frame = Instance.new("Frame", parent)
     frame.Size = UDim2.new(1, -15, 0, 45)
     frame.BackgroundColor3 = settings.menuBackgroundColor
@@ -215,12 +228,12 @@ local function createToggle(name, key, parent)
         tweenService:Create(circle, TweenInfo.new(0.2), {Position = targetPos}):Play()
         tweenService:Create(toggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = targetColor}):Play()
         
-        -- Специфическая проверка для Watermark
         if key == "watermarkEnabled" then updateWatermarkVisual() end
+        if callback then callback(settings[key]) end
     end)
 end
 
-local function createSlider(name, key, min, max, parent)
+local function createSlider(name, key, min, max, parent, callback)
     local frame = Instance.new("Frame", parent)
     frame.Size = UDim2.new(1, -15, 0, 55)
     frame.BackgroundTransparency = 1
@@ -241,14 +254,17 @@ local function createSlider(name, key, min, max, parent)
     fill.Size = UDim2.new((settings[key] - min) / (max - min), 0, 1, 0)
     fill.BackgroundColor3 = settings.sliderFillColor
     Instance.new("UICorner", fill)
+    
     local function update(input)
-        local pos = math.clamp((input.Position.X - sliderBg.AbsolutePosition.X) / sliderBg.AbsoluteSize.X, 0, 1)
-        local val = math.floor(min + (max - min) * pos)
+        local pos = math_clamp((input.Position.X - sliderBg.AbsolutePosition.X) / sliderBg.AbsoluteSize.X, 0, 1)
+        local val = math_floor(min + (max - min) * pos)
         settings[key] = val
         label.Text = name .. ": " .. val
         fill.Size = UDim2.new(pos, 0, 1, 0)
         if key == "watermarkSize" then updateWatermarkVisual() end
+        if callback then callback(val) end
     end
+    
     local dragging = false
     sliderBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true update(input) end end)
     userInputService.InputChanged:Connect(function(input) if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then update(input) end end)
@@ -283,7 +299,7 @@ local function createKeybind(name, key, parent)
     keybindBtn.MouseButton1Click:Connect(function()
         if waitingForKey then return end
         waitingForKey = true
-        keybindBtn.Text = "Press Key..."
+        keybindBtn.Text = "..."
         local inputConnection
         inputConnection = userInputService.InputBegan:Connect(function(input, gp)
             if gp then return end
@@ -321,8 +337,7 @@ local function createColorPicker(label, key, parent)
     local layout = Instance.new("UIListLayout", container)
     layout.FillDirection = Enum.FillDirection.Horizontal
     layout.Padding = UDim.new(0, 8)
-    local colors = settings.colorPickerColors
-    for _, color in ipairs(colors) do
+    for _, color in ipairs(settings.colorPickerColors) do
         local btn = Instance.new("TextButton", container)
         btn.Size = UDim2.new(0, 30, 0, 30)
         btn.BackgroundColor3 = color
@@ -332,26 +347,55 @@ local function createColorPicker(label, key, parent)
     end
 end
 
+-- Обновление освещения для Fullbright
+local function updateLighting()
+    if settings.fullbrightEnabled then
+        lighting.Brightness = 2
+        lighting.ClockTime = 14
+        lighting.FogEnd = 100000
+        lighting.GlobalShadows = false
+        lighting.Ambient = Color3.fromRGB(255, 255, 255)
+    else
+        lighting.Brightness = originalLighting.Brightness
+        lighting.ClockTime = originalLighting.ClockTime
+        lighting.FogEnd = originalLighting.FogEnd
+        lighting.GlobalShadows = originalLighting.GlobalShadows
+        lighting.Ambient = originalLighting.Ambient
+    end
+end
+
 local function updateMenu()
     for _, v in pairs(contentArea:GetChildren()) do if not v:IsA("UIListLayout") then v:Destroy() end end
+    
     if settings.currentTab == "Visuals" then
         createToggle("ESP Boxes", "espBoxes", contentArea)
         createToggle("ESP Names", "espNames", contentArea)
         createToggle("Health Bar", "espHealth", contentArea)
         createToggle("Team Check", "teamCheck", contentArea)
+        createToggle("Fullbright", "fullbrightEnabled", contentArea, updateLighting)
+        createSlider("FOV", "fovValue", 30, 120, contentArea)
         createToggle("Watermark", "watermarkEnabled", contentArea)
         createSlider("Watermark Width", "watermarkSize", 150, 500, contentArea)
         createColorPicker("Visible Enemy Color:", "colorVisible", contentArea)
         createColorPicker("Hidden Enemy Color:", "colorHidden", contentArea)
         createColorPicker("Ally Color:", "colorAlly", contentArea)
+        
     elseif settings.currentTab == "Movement" then
         createToggle("Fly", "flyEnabled", contentArea)
-        createSlider("Fly Speed", "flySpeed", 1, 100, contentArea)
+        createSlider("Fly Speed", "flySpeed", 1, 200, contentArea)
         createToggle("NoClip", "noClipEnabled", contentArea)
         createToggle("Infinite Jump", "infiniteJumpEnabled", contentArea)
-        createSlider("WalkSpeed", "walkSpeed", 16, 100, contentArea)
-        createSlider("JumpPower", "jumpPower", 50, 200, contentArea)
+        -- Изменено по просьбе: WalkSpeed от 1 до 128
+        createSlider("WalkSpeed", "walkSpeed", 1, 128, contentArea)
+        createSlider("JumpPower", "jumpPower", 1, 300, contentArea)
+        
     elseif settings.currentTab == "Player" then
+        createToggle("Auto Clicker", "autoClickerEnabled", contentArea)
+        local line = Instance.new("Frame", contentArea)
+        line.Size = UDim2.new(1, -15, 0, 2)
+        line.BackgroundColor3 = settings.menuAccentColor
+        line.BorderSizePixel = 0
+        
         for _, p in pairs(players:GetPlayers()) do
             if p ~= player then
                 local playerFrame = Instance.new("Frame", contentArea)
@@ -384,6 +428,7 @@ local function updateMenu()
                 end)
             end
         end
+        
     elseif settings.currentTab == "Keybinds" then
         createToggle("Enable Keybinds", "keybindsEnabled", contentArea)
         createKeybind("Toggle Menu", "toggleMenu", contentArea)
@@ -391,6 +436,7 @@ local function updateMenu()
         createKeybind("Toggle NoClip", "toggleNoClip", contentArea)
         createKeybind("Toggle Infinite Jump", "toggleInfiniteJump", contentArea)
         createKeybind("Toggle Anti-AFK", "toggleAntiAfk", contentArea)
+        
     elseif settings.currentTab == "Misc" then
         local save = Instance.new("TextButton", contentArea)
         save.Size = UDim2.new(1, -15, 0, 40)
@@ -399,7 +445,11 @@ local function updateMenu()
         save.TextColor3 = Color3.new(1,1,1)
         save.Font = Enum.Font.GothamBold
         Instance.new("UICorner", save)
-        save.MouseButton1Click:Connect(function() if writefile then writefile(settings.configName, httpService:JSONEncode(settings )) end end)
+        save.MouseButton1Click:Connect(function() 
+            if writefile then 
+                pcall(function() writefile(settings.configName, httpService:JSONEncode(settings)) end) 
+            end 
+        end)
         
         local unload = Instance.new("TextButton", contentArea)
         unload.Size = UDim2.new(1, -15, 0, 40)
@@ -410,8 +460,12 @@ local function updateMenu()
         Instance.new("UICorner", unload)
         unload.MouseButton1Click:Connect(function() 
             settings.active = false
-            screenGui:Destroy() watermarkGui:Destroy()
-            for _, obj in pairs(espObjects) do pcall(function() obj.Highlight:Destroy() obj.Billboard:Destroy() end) end
+            screenGui:Destroy() 
+            watermarkGui:Destroy()
+            updateLighting() -- Reset lighting
+            for _, obj in pairs(espObjects) do 
+                pcall(function() obj.Highlight:Destroy() obj.Billboard:Destroy() end) 
+            end
         end)
     end
 end
@@ -440,13 +494,13 @@ end
 
 createTab("Visuals")
 createTab("Movement")
-createTab("Misc")
 createTab("Player")
 createTab("Keybinds")
+createTab("Misc")
 updateMenu()
 
 -- ==========================================
--- 3. ЛОГИКА ESP И MOVEMENT (ОПТИМИЗИРОВАННАЯ)
+-- 3. ЛОГИКА (ОПТИМИЗИРОВАННАЯ)
 -- ==========================================
 local function checkVisibility(targetChar)
     local myChar = player.Character
@@ -467,21 +521,26 @@ local function createEsp(targetPlayer)
             local hum = character:WaitForChild("Humanoid", 10)
             if not head or not hum then return end
             if espObjects[targetPlayer] then pcall(function() espObjects[targetPlayer].Highlight:Destroy() espObjects[targetPlayer].Billboard:Destroy() end) end
+            
             local highlight = Instance.new("Highlight", character)
             highlight.FillTransparency = 0.5
             highlight.Enabled = false
+            
             local billboard = Instance.new("BillboardGui", head)
             billboard.Size = UDim2.new(0, 200, 0, 60)
             billboard.AlwaysOnTop = true
             billboard.StudsOffset = Vector3.new(0, 3, 0)
             billboard.Enabled = false
+            
             local healthBg = Instance.new("Frame", billboard)
             healthBg.Size = UDim2.new(0, 60, 0, 6)
             healthBg.Position = UDim2.new(0.5, -30, 0, 0)
             healthBg.BackgroundColor3 = Color3.new(0, 0, 0)
+            
             local healthMain = Instance.new("Frame", healthBg)
             healthMain.Size = UDim2.new(1, 0, 1, 0)
             healthMain.BackgroundColor3 = Color3.new(0, 1, 0)
+            
             local label = Instance.new("TextLabel", billboard)
             label.Size = UDim2.new(1, 0, 0, 20)
             label.Position = UDim2.new(0, 0, 0, 10)
@@ -491,6 +550,7 @@ local function createEsp(targetPlayer)
             label.Font = Enum.Font.SourceSansBold
             label.TextStrokeTransparency = 0.5
             label.Text = ""
+            
             espObjects[targetPlayer] = { Highlight = highlight, Billboard = billboard, HealthBar = healthMain, Label = label, Char = character }
         end)
     end
@@ -498,35 +558,65 @@ local function createEsp(targetPlayer)
     if targetPlayer.Character then setup(targetPlayer.Character) end
 end
 
-task.spawn(function() for _, p in pairs(players:GetPlayers()) do createEsp(p) task.wait(0.05) end end)
+task_spawn(function() 
+    for _, p in pairs(players:GetPlayers()) do 
+        createEsp(p) 
+        task_wait(0.05) 
+    end 
+end)
 players.PlayerAdded:Connect(createEsp)
 
+-- Главный цикл ESP и FOV
 runService.RenderStepped:Connect(function()
     if not settings.active then return end
-    for targetPlayer, obj in pairs(espObjects) do
-        local hum = obj.Char:FindFirstChild("Humanoid")
-        local root = obj.Char:FindFirstChild("HumanoidRootPart")
-        if hum and root and hum.Health > 0 then
-            local isAlly = (targetPlayer.Team == player.Team)
-            local finalColor = settings.colorHidden
-            if settings.teamCheck and isAlly then finalColor = settings.colorAlly
-            else finalColor = checkVisibility(obj.Char) and settings.colorVisible or settings.colorHidden end
-            obj.Highlight.Enabled = settings.espBoxes
-            obj.Highlight.FillColor = finalColor
-            obj.Billboard.Enabled = (settings.espNames or settings.espHealth)
-            obj.HealthBar.Parent.Visible = settings.espHealth
-            obj.HealthBar.Size = UDim2.new(hum.Health / hum.MaxHealth, 0, 1, 0)
-            if settings.espNames then
-                local dist = math.floor((root.Position - player.Character.HumanoidRootPart.Position).Magnitude)
-                obj.Label.Text = targetPlayer.Name .. " [" .. dist .. "s]"
-                obj.Label.TextColor3 = finalColor
-            else obj.Label.Text = "" end
-        else obj.Highlight.Enabled = false obj.Billboard.Enabled = false end
+    
+    -- FOV Update
+    if workspace.CurrentCamera then
+        workspace.CurrentCamera.FieldOfView = settings.fovValue
+    end
+    
+    -- ESP Update
+    if settings.espBoxes or settings.espNames or settings.espHealth then
+        for targetPlayer, obj in pairs(espObjects) do
+            if obj.Char and obj.Char.Parent then
+                local hum = obj.Char:FindFirstChild("Humanoid")
+                local root = obj.Char:FindFirstChild("HumanoidRootPart")
+                if hum and root and hum.Health > 0 then
+                    local isAlly = (targetPlayer.Team == player.Team)
+                    local finalColor = settings.colorHidden
+                    if settings.teamCheck and isAlly then 
+                        finalColor = settings.colorAlly
+                    else 
+                        finalColor = checkVisibility(obj.Char) and settings.colorVisible or settings.colorHidden 
+                    end
+                    
+                    obj.Highlight.Enabled = settings.espBoxes
+                    obj.Highlight.FillColor = finalColor
+                    obj.Billboard.Enabled = (settings.espNames or settings.espHealth)
+                    obj.HealthBar.Parent.Visible = settings.espHealth
+                    obj.HealthBar.Size = UDim2.new(hum.Health / hum.MaxHealth, 0, 1, 0)
+                    
+                    if settings.espNames then
+                        local dist = math_floor((root.Position - player.Character.HumanoidRootPart.Position).Magnitude)
+                        obj.Label.Text = targetPlayer.Name .. " [" .. dist .. "s]"
+                        obj.Label.TextColor3 = finalColor
+                    else 
+                        obj.Label.Text = "" 
+                    end
+                else 
+                    obj.Highlight.Enabled = false 
+                    obj.Billboard.Enabled = false 
+                end
+            end
+        end
     end
 end)
 
+-- Цикл Movement (Fly, WalkSpeed, JumpPower)
 local bodyVelocity, bodyGyro
 runService.RenderStepped:Connect(function()
+    if not settings.active then return end
+    
     if settings.flyEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
         local hrp = player.Character.HumanoidRootPart
         if not bodyVelocity then
@@ -550,68 +640,80 @@ runService.RenderStepped:Connect(function()
         if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
     end
 
-
-
-    -- WalkSpeed and JumpPower
     if player.Character and player.Character:FindFirstChild("Humanoid") then
-        player.Character.Humanoid.WalkSpeed = settings.walkSpeed
-        player.Character.Humanoid.JumpPower = settings.jumpPower
+        local hum = player.Character.Humanoid
+        hum.WalkSpeed = settings.walkSpeed
+        hum.JumpPower = settings.jumpPower
     end
 end)
 
-task.spawn(function()
-    while task.wait() do
-        if not settings.active then break end
-        if settings.infiniteJumpEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
-            local hum = player.Character.Humanoid
-            if hum:GetState() == Enum.HumanoidStateType.Freefall then
-                hum:ChangeState(Enum.HumanoidStateType.Jumping)
-            end
-        end
-    end
-end)
-
+-- NoClip Оптимизированный
 runService.Stepped:Connect(function()
     if settings.noClipEnabled and player.Character then
-        for _, part in pairs(player.Character:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
-    end
-end)
-
-task.spawn(function()
-    while task.wait(5) do -- Check every 5 seconds
-        if not settings.active then break end
-        if settings.antiAfkEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
-            local hum = player.Character.Humanoid
-            if hum.Health > 0 and hum:GetState() == Enum.HumanoidStateType.Running then
-                -- Simulate small movement to prevent AFK kick
-                local currentPos = player.Character.HumanoidRootPart.Position
-                player.Character.HumanoidRootPart.CFrame = CFrame.new(currentPos + Vector3.new(0.01, 0, 0))
-                task.wait(0.1)
-                player.Character.HumanoidRootPart.CFrame = CFrame.new(currentPos)
+        for _, part in pairs(player.Character:GetChildren()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            elseif part:IsA("Model") then
+                for _, subpart in pairs(part:GetChildren()) do
+                    if subpart:IsA("BasePart") then subpart.CanCollide = false end
+                end
             end
         end
     end
-
-
-
 end)
 
+-- Infinite Jump
+userInputService.JumpRequest:Connect(function()
+    if settings.infiniteJumpEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
+        player.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
+
+-- Anti-AFK
+task_spawn(function()
+    while task_wait(5) do
+        if not settings.active then break end
+        if settings.antiAfkEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local hrp = player.Character.HumanoidRootPart
+            local currentPos = hrp.CFrame
+            hrp.CFrame = currentPos * CFrame.new(0, 0.01, 0)
+            task_wait(0.1)
+            hrp.CFrame = currentPos
+        end
+    end
+end)
+
+-- Auto Clicker (Оптимизированный)
+task_spawn(function()
+    local vim = game:GetService("VirtualInputManager")
+    while task_wait(0.1) do
+        if not settings.active then break end
+        if settings.autoClickerEnabled then
+            vim:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+            vim:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+        end
+    end
+end)
+
+-- Обработка клавиш
 userInputService.InputBegan:Connect(function(input, gp)
     if not settings.keybindsEnabled then return end
-    if not gp and settings.keybinds.toggleMenu and input.KeyCode == settings.keybinds.toggleMenu then
-        settings.menuVisible = not settings.menuVisible
-        mainFrame.Visible = settings.menuVisible
-    elseif not gp and settings.keybinds.toggleFly and input.KeyCode == settings.keybinds.toggleFly then
-        settings.flyEnabled = not settings.flyEnabled
-        updateMenu() -- Refresh menu to show toggle state
-    elseif not gp and settings.keybinds.toggleNoClip and input.KeyCode == settings.keybinds.toggleNoClip then
-        settings.noClipEnabled = not settings.noClipEnabled
-        updateMenu() -- Refresh menu to show toggle state
-    elseif not gp and settings.keybinds.toggleInfiniteJump and input.KeyCode == settings.keybinds.toggleInfiniteJump then
-        settings.infiniteJumpEnabled = not settings.infiniteJumpEnabled
-        updateMenu() -- Refresh menu to show toggle state
-    elseif not gp and settings.keybinds.toggleAntiAfk and input.KeyCode == settings.keybinds.toggleAntiAfk then
-        settings.antiAfkEnabled = not settings.antiAfkEnabled
-        updateMenu() -- Refresh menu to show toggle state
+    if not gp then
+        if settings.keybinds.toggleMenu and input.KeyCode == settings.keybinds.toggleMenu then
+            settings.menuVisible = not settings.menuVisible
+            mainFrame.Visible = settings.menuVisible
+        elseif settings.keybinds.toggleFly and input.KeyCode == settings.keybinds.toggleFly then
+            settings.flyEnabled = not settings.flyEnabled
+            updateMenu()
+        elseif settings.keybinds.toggleNoClip and input.KeyCode == settings.keybinds.toggleNoClip then
+            settings.noClipEnabled = not settings.noClipEnabled
+            updateMenu()
+        elseif settings.keybinds.toggleInfiniteJump and input.KeyCode == settings.keybinds.toggleInfiniteJump then
+            settings.infiniteJumpEnabled = not settings.infiniteJumpEnabled
+            updateMenu()
+        elseif settings.keybinds.toggleAntiAfk and input.KeyCode == settings.keybinds.toggleAntiAfk then
+            settings.antiAfkEnabled = not settings.antiAfkEnabled
+            updateMenu()
+        end
     end
 end)
