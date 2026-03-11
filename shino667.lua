@@ -1,4 +1,4 @@
--- [[ SHINO V 4.4 - MEDAL BYPASS & OPTIMIZED ]] --
+-- [[ SHINO V 4.5 - FINAL FIXED & HITBOXES ]] --
 local player = game.Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local userInputService = game:GetService("UserInputService")
@@ -8,9 +8,8 @@ local stats = game:GetService("Stats")
 local tweenService = game:GetService("TweenService")
 local httpService = game:GetService("HttpService")
 local lighting = game:GetService("Lighting")
-local guiService = game:GetService("GuiService")
 
--- Кэширование для оптимизации
+-- Кэширование
 local math_floor = math.floor
 local math_clamp = math.clamp
 local task_wait = task.wait
@@ -32,7 +31,14 @@ local settings = {
     watermarkSize = 280,
     fullbrightEnabled = false,
     fovValue = 70,
-    streamproofEnabled = true, -- По умолчанию включено для Medal
+    streamproofEnabled = true,
+    
+    -- Hitboxes
+    hitboxEnabled = false,
+    hitboxSize = 2,
+    hitboxTransparency = 0.5,
+    hitboxColor = Color3.fromRGB(255, 0, 0),
+    hitboxPart = "HumanoidRootPart", -- "Head", "Torso", "HumanoidRootPart"
     
     -- Colors
     colorVisible = Color3.fromRGB(255, 255, 255),
@@ -91,34 +97,21 @@ local originalLighting = {
 }
 
 -- ==========================================
--- 0. MEDAL/STREAMPROOF LOGIC
+-- 0. STREAMPROOF & PROTECTION
 -- ==========================================
--- Функция для защиты GUI от захвата (Medal, OBS, Discord)
-local function applyStreamproof(gui)
+local function protectGui(gui)
     if not gui then return end
     pcall(function()
-        -- Основной метод для большинства читов (Synapse, ScriptWare, Fluxus и др.)
-        if getgenv and getgenv().set_thread_identity then
-            getgenv().set_thread_identity(8)
-        end
-        
-        -- Свойство защиты от захвата (если поддерживается исполнителем)
-        if gui:IsA("ScreenGui") then
-            -- Пытаемся использовать встроенные функции защиты исполнителей
-            if setbit and setbit(gui, 11, true) then end -- Некоторые старые методы
-            
-            -- Стандартное поведение для скрытия
-            gui.DisplayOrder = 9999999
-            
-            -- Если исполнитель поддерживает Synapse-подобные функции
-            if syn and syn.protect_gui then
-                syn.protect_gui(gui)
-            end
+        if settings.streamproofEnabled then
+            if syn and syn.protect_gui then syn.protect_gui(gui) end
+            gui.DisplayOrder = 999999
+            -- Если есть возможность скрыть от Capture
+            if gui:IsA("ScreenGui") and gui.Respondable == false then gui.Respondable = false end
         end
     end)
 end
 
--- Определяем безопасный родитель для GUI
+-- Пытаемся найти лучший родитель для Streamproof
 local parentGui = (gethui and gethui()) or (game:GetService("CoreGui"):FindFirstChild("RobloxGui")) or playerGui
 
 -- ==========================================
@@ -128,7 +121,7 @@ local watermarkGui = Instance.new("ScreenGui")
 watermarkGui.Name = "ShinoWatermark"
 watermarkGui.ResetOnSpawn = false
 watermarkGui.Parent = parentGui
-applyStreamproof(watermarkGui)
+protectGui(watermarkGui)
 
 local watermarkFrame = Instance.new("Frame", watermarkGui)
 watermarkFrame.Size = UDim2.new(0, settings.watermarkSize, 0, 30)
@@ -189,7 +182,7 @@ local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "ShinoNeonMenu"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = parentGui
-applyStreamproof(screenGui)
+protectGui(screenGui)
 
 local mainFrame = Instance.new("Frame", screenGui)
 mainFrame.Size = UDim2.new(0, 550, 0, 380)
@@ -298,7 +291,6 @@ local function createSlider(name, key, min, max, parent, callback)
         settings[key] = val
         label.Text = name .. ": " .. val
         fill.Size = UDim2.new(pos, 0, 1, 0)
-        if key == "watermarkSize" then updateWatermarkVisual() end
         if callback then callback(val) end
     end
     
@@ -308,50 +300,36 @@ local function createSlider(name, key, min, max, parent, callback)
     userInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
 end
 
-local function createKeybind(name, key, parent)
+local function createDropdown(name, key, options, parent)
     local frame = Instance.new("Frame", parent)
     frame.Size = UDim2.new(1, -15, 0, 45)
     frame.BackgroundColor3 = settings.menuBackgroundColor
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0, settings.menuButtonCornerRadius)
-
+    
     local label = Instance.new("TextLabel", frame)
-    label.Size = UDim2.new(1, -70, 1, 0)
+    label.Size = UDim2.new(1, -120, 1, 0)
     label.Position = UDim2.new(0, 15, 0, 0)
-    label.Text = name
+    label.Text = name .. ": " .. settings[key]
     label.TextColor3 = settings.menuTextColor
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.BackgroundTransparency = 1
     label.Font = Enum.Font.Gotham
-    label.TextSize = 15
-
-    local keybindBtn = Instance.new("TextButton", frame)
-    keybindBtn.Size = UDim2.new(0, 60, 0, 22)
-    keybindBtn.Position = UDim2.new(1, -75, 0.5, -11)
-    keybindBtn.BackgroundColor3 = settings.toggleButtonColor
-    keybindBtn.Text = settings.keybinds[key] and settings.keybinds[key].Name or "None"
-    keybindBtn.TextColor3 = settings.menuTextColor
-    Instance.new("UICorner", keybindBtn).CornerRadius = UDim.new(0, settings.menuButtonCornerRadius)
-
-    local waitingForKey = false
-    keybindBtn.MouseButton1Click:Connect(function()
-        if waitingForKey then return end
-        waitingForKey = true
-        keybindBtn.Text = "..."
-        local inputConnection
-        inputConnection = userInputService.InputBegan:Connect(function(input, gp)
-            if gp then return end
-            if input.UserInputType == Enum.UserInputType.Keyboard then
-                if input.KeyCode == Enum.KeyCode.Backspace then
-                    settings.keybinds[key] = nil
-                    keybindBtn.Text = "None"
-                else
-                    settings.keybinds[key] = input.KeyCode
-                    keybindBtn.Text = input.KeyCode.Name
-                end
-                waitingForKey = false
-                inputConnection:Disconnect()
-            end
-        end)
+    label.TextSize = 14
+    
+    local btn = Instance.new("TextButton", frame)
+    btn.Size = UDim2.new(0, 100, 0, 25)
+    btn.Position = UDim2.new(1, -110, 0.5, -12.5)
+    btn.BackgroundColor3 = settings.menuButtonColor
+    btn.Text = "Change"
+    btn.TextColor3 = settings.menuTextColor
+    Instance.new("UICorner", btn)
+    
+    local index = 1
+    btn.MouseButton1Click:Connect(function()
+        index = index + 1
+        if index > #options then index = 1 end
+        settings[key] = options[index]
+        label.Text = name .. ": " .. settings[key]
     end)
 end
 
@@ -384,42 +362,32 @@ local function createColorPicker(label, key, parent)
     end
 end
 
--- Обновление освещения для Fullbright
-local function updateLighting()
-    if settings.fullbrightEnabled then
-        lighting.Brightness = 2
-        lighting.ClockTime = 14
-        lighting.FogEnd = 100000
-        lighting.GlobalShadows = false
-        lighting.Ambient = Color3.fromRGB(255, 255, 255)
-    else
-        lighting.Brightness = originalLighting.Brightness
-        lighting.ClockTime = originalLighting.ClockTime
-        lighting.FogEnd = originalLighting.FogEnd
-        lighting.GlobalShadows = originalLighting.GlobalShadows
-        lighting.Ambient = originalLighting.Ambient
-    end
-end
-
 local function updateMenu()
     for _, v in pairs(contentArea:GetChildren()) do if not v:IsA("UIListLayout") then v:Destroy() end end
     
     if settings.currentTab == "Visuals" then
-        createToggle("Streamproof (Medal/OBS)", "streamproofEnabled", contentArea, function(v)
-            if v then 
-                applyStreamproof(screenGui)
-                applyStreamproof(watermarkGui)
-                for _, obj in pairs(espObjects) do applyStreamproof(obj.Billboard) end
-            end
-        end)
+        createToggle("Streamproof (OBS/Medal)", "streamproofEnabled", contentArea)
         createToggle("ESP Boxes", "espBoxes", contentArea)
         createToggle("ESP Names", "espNames", contentArea)
         createToggle("Health Bar", "espHealth", contentArea)
         createToggle("Team Check", "teamCheck", contentArea)
-        createToggle("Fullbright", "fullbrightEnabled", contentArea, updateLighting)
+        createToggle("Fullbright", "fullbrightEnabled", contentArea, function()
+            if settings.fullbrightEnabled then
+                lighting.Brightness = 2
+                lighting.ClockTime = 14
+                lighting.FogEnd = 100000
+                lighting.GlobalShadows = false
+                lighting.Ambient = Color3.fromRGB(255, 255, 255)
+            else
+                lighting.Brightness = originalLighting.Brightness
+                lighting.ClockTime = originalLighting.ClockTime
+                lighting.FogEnd = originalLighting.FogEnd
+                lighting.GlobalShadows = originalLighting.GlobalShadows
+                lighting.Ambient = originalLighting.Ambient
+            end
+        end)
         createSlider("FOV", "fovValue", 30, 120, contentArea)
         createToggle("Watermark", "watermarkEnabled", contentArea)
-        createSlider("Watermark Width", "watermarkSize", 150, 500, contentArea)
         createColorPicker("Visible Enemy Color:", "colorVisible", contentArea)
         createColorPicker("Hidden Enemy Color:", "colorHidden", contentArea)
         createColorPicker("Ally Color:", "colorAlly", contentArea)
@@ -432,38 +400,36 @@ local function updateMenu()
         createSlider("WalkSpeed", "walkSpeed", 1, 128, contentArea)
         createSlider("JumpPower", "jumpPower", 1, 300, contentArea)
         
+    elseif settings.currentTab == "Hitboxes" then
+        createToggle("Enable Hitboxes", "hitboxEnabled", contentArea)
+        createDropdown("Target Part", "hitboxPart", {"HumanoidRootPart", "Head", "Torso"}, contentArea)
+        createSlider("Hitbox Size", "hitboxSize", 1, 100, contentArea)
+        createSlider("Transparency (0-100)", "hitboxTransparency", 0, 100, contentArea)
+        createColorPicker("Hitbox Color:", "hitboxColor", contentArea)
+
     elseif settings.currentTab == "Player" then
         createToggle("Auto Clicker", "autoClickerEnabled", contentArea)
-        local line = Instance.new("Frame", contentArea)
-        line.Size = UDim2.new(1, -15, 0, 2)
-        line.BackgroundColor3 = settings.menuAccentColor
-        line.BorderSizePixel = 0
-        
         for _, p in pairs(players:GetPlayers()) do
             if p ~= player then
                 local playerFrame = Instance.new("Frame", contentArea)
                 playerFrame.Size = UDim2.new(1, -15, 0, 45)
                 playerFrame.BackgroundColor3 = settings.menuBackgroundColor
                 Instance.new("UICorner", playerFrame).CornerRadius = UDim.new(0, settings.menuButtonCornerRadius)
-
                 local playerName = Instance.new("TextLabel", playerFrame)
                 playerName.Size = UDim2.new(1, -100, 1, 0)
                 playerName.Position = UDim2.new(0, 15, 0, 0)
                 playerName.Text = p.Name
                 playerName.TextColor3 = settings.menuTextColor
-                playerName.TextXAlignment = Enum.TextXAlignment.Left
                 playerName.BackgroundTransparency = 1
                 playerName.Font = Enum.Font.Gotham
-                playerName.TextSize = 15
-
+                playerName.TextSize = 14
                 local teleportBtn = Instance.new("TextButton", playerFrame)
                 teleportBtn.Size = UDim2.new(0, 80, 0, 25)
                 teleportBtn.Position = UDim2.new(1, -95, 0.5, -12.5)
                 teleportBtn.BackgroundColor3 = settings.menuAccentColor
                 teleportBtn.Text = "Teleport"
                 teleportBtn.TextColor3 = settings.menuTextColor
-                Instance.new("UICorner", teleportBtn).CornerRadius = UDim.new(0, settings.menuButtonCornerRadius)
-
+                Instance.new("UICorner", teleportBtn)
                 teleportBtn.MouseButton1Click:Connect(function()
                     if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
                         player.Character.HumanoidRootPart.CFrame = p.Character.HumanoidRootPart.CFrame
@@ -472,28 +438,7 @@ local function updateMenu()
             end
         end
         
-    elseif settings.currentTab == "Keybinds" then
-        createToggle("Enable Keybinds", "keybindsEnabled", contentArea)
-        createKeybind("Toggle Menu", "toggleMenu", contentArea)
-        createKeybind("Toggle Fly", "toggleFly", contentArea)
-        createKeybind("Toggle NoClip", "toggleNoClip", contentArea)
-        createKeybind("Toggle Infinite Jump", "toggleInfiniteJump", contentArea)
-        createKeybind("Toggle Anti-AFK", "toggleAntiAfk", contentArea)
-        
     elseif settings.currentTab == "Misc" then
-        local save = Instance.new("TextButton", contentArea)
-        save.Size = UDim2.new(1, -15, 0, 40)
-        save.BackgroundColor3 = settings.menuAccentColor
-        save.Text = "Save Config"
-        save.TextColor3 = Color3.new(1,1,1)
-        save.Font = Enum.Font.GothamBold
-        Instance.new("UICorner", save)
-        save.MouseButton1Click:Connect(function() 
-            if writefile then 
-                pcall(function() writefile(settings.configName, httpService:JSONEncode(settings)) end) 
-            end 
-        end)
-        
         local unload = Instance.new("TextButton", contentArea)
         unload.Size = UDim2.new(1, -15, 0, 40)
         unload.BackgroundColor3 = Color3.fromRGB(100, 30, 30)
@@ -505,7 +450,6 @@ local function updateMenu()
             settings.active = false
             screenGui:Destroy() 
             watermarkGui:Destroy()
-            updateLighting() -- Reset lighting
             for _, obj in pairs(espObjects) do 
                 pcall(function() obj.Highlight:Destroy() obj.Billboard:Destroy() end) 
             end
@@ -521,8 +465,7 @@ local function createTab(name)
     btn.TextColor3 = settings.currentTab == name and settings.menuTextColor or Color3.fromRGB(150, 150, 150)
     btn.Font = Enum.Font.GothamSemibold
     btn.TextSize = 14
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, settings.menuButtonCornerRadius)
-    
+    Instance.new("UICorner", btn)
     btn.MouseButton1Click:Connect(function()
         settings.currentTab = name
         for _, v in pairs(tabContainer:GetChildren()) do
@@ -537,13 +480,13 @@ end
 
 createTab("Visuals")
 createTab("Movement")
+createTab("Hitboxes")
 createTab("Player")
-createTab("Keybinds")
 createTab("Misc")
 updateMenu()
 
 -- ==========================================
--- 3. ЛОГИКА (ОПТИМИЗИРОВАННАЯ)
+-- 3. ЛОГИКА ESP И ХИТБОКСОВ
 -- ==========================================
 local function checkVisibility(targetChar)
     local myChar = player.Character
@@ -574,7 +517,7 @@ local function createEsp(targetPlayer)
             billboard.AlwaysOnTop = true
             billboard.StudsOffset = Vector3.new(0, 3, 0)
             billboard.Enabled = false
-            if settings.streamproofEnabled then applyStreamproof(billboard) end
+            protectGui(billboard)
             
             local healthBg = Instance.new("Frame", billboard)
             healthBg.Size = UDim2.new(0, 60, 0, 6)
@@ -603,64 +546,65 @@ local function createEsp(targetPlayer)
 end
 
 task_spawn(function() 
-    for _, p in pairs(players:GetPlayers()) do 
-        createEsp(p) 
-        task_wait(0.05) 
-    end 
+    for _, p in pairs(players:GetPlayers()) do createEsp(p) task_wait(0.05) end 
 end)
 players.PlayerAdded:Connect(createEsp)
 
--- Главный цикл ESP и FOV
+-- Цикл обновления ESP и Хитбоксов
 runService.RenderStepped:Connect(function()
     if not settings.active then return end
     
-    -- FOV Update
-    if workspace.CurrentCamera then
-        workspace.CurrentCamera.FieldOfView = settings.fovValue
-    end
+    -- FOV
+    if workspace.CurrentCamera then workspace.CurrentCamera.FieldOfView = settings.fovValue end
     
-    -- ESP Update
-    if settings.espBoxes or settings.espNames or settings.espHealth then
-        for targetPlayer, obj in pairs(espObjects) do
-            if obj.Char and obj.Char.Parent then
-                local hum = obj.Char:FindFirstChild("Humanoid")
-                local root = obj.Char:FindFirstChild("HumanoidRootPart")
-                if hum and root and hum.Health > 0 then
-                    local isAlly = (targetPlayer.Team == player.Team)
-                    local finalColor = settings.colorHidden
-                    if settings.teamCheck and isAlly then 
-                        finalColor = settings.colorAlly
-                    else 
-                        finalColor = checkVisibility(obj.Char) and settings.colorVisible or settings.colorHidden 
-                    end
-                    
-                    obj.Highlight.Enabled = settings.espBoxes
-                    obj.Highlight.FillColor = finalColor
-                    obj.Billboard.Enabled = (settings.espNames or settings.espHealth)
-                    obj.HealthBar.Parent.Visible = settings.espHealth
-                    obj.HealthBar.Size = UDim2.new(hum.Health / hum.MaxHealth, 0, 1, 0)
-                    
-                    if settings.espNames then
-                        local dist = math_floor((root.Position - player.Character.HumanoidRootPart.Position).Magnitude)
-                        obj.Label.Text = targetPlayer.Name .. " [" .. dist .. "s]"
-                        obj.Label.TextColor3 = finalColor
-                    else 
-                        obj.Label.Text = "" 
-                    end
+    for targetPlayer, obj in pairs(espObjects) do
+        if obj.Char and obj.Char.Parent then
+            local hum = obj.Char:FindFirstChild("Humanoid")
+            local root = obj.Char:FindFirstChild("HumanoidRootPart")
+            if hum and root and hum.Health > 0 then
+                -- ESP LOGIC
+                local isAlly = (targetPlayer.Team == player.Team)
+                local finalColor = settings.colorHidden
+                if settings.teamCheck and isAlly then 
+                    finalColor = settings.colorAlly
                 else 
-                    obj.Highlight.Enabled = false 
-                    obj.Billboard.Enabled = false 
+                    finalColor = checkVisibility(obj.Char) and settings.colorVisible or settings.colorHidden 
                 end
+                
+                obj.Highlight.Enabled = settings.espBoxes
+                obj.Highlight.FillColor = finalColor
+                obj.Billboard.Enabled = (settings.espNames or settings.espHealth)
+                obj.HealthBar.Parent.Visible = settings.espHealth
+                obj.HealthBar.Size = UDim2.new(hum.Health / hum.MaxHealth, 0, 1, 0)
+                
+                if settings.espNames then
+                    local dist = math_floor((root.Position - player.Character.HumanoidRootPart.Position).Magnitude)
+                    obj.Label.Text = targetPlayer.Name .. " [" .. dist .. "s]"
+                    obj.Label.TextColor3 = finalColor
+                else obj.Label.Text = "" end
+                
+                -- HITBOX LOGIC
+                if settings.hitboxEnabled then
+                    local part = obj.Char:FindFirstChild(settings.hitboxPart)
+                    if part then
+                        part.Size = Vector3.new(settings.hitboxSize, settings.hitboxSize, settings.hitboxSize)
+                        part.Transparency = settings.hitboxTransparency / 100
+                        part.Color = settings.hitboxColor
+                        part.CanCollide = false
+                    end
+                end
+            else
+                obj.Highlight.Enabled = false
+                obj.Billboard.Enabled = false
             end
         end
     end
 end)
 
--- Цикл Movement (Fly, WalkSpeed, JumpPower)
+-- Цикл Movement
 local bodyVelocity, bodyGyro
 runService.RenderStepped:Connect(function()
     if not settings.active then return end
-    
     if settings.flyEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
         local hrp = player.Character.HumanoidRootPart
         if not bodyVelocity then
@@ -683,26 +627,16 @@ runService.RenderStepped:Connect(function()
         if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
         if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
     end
-
     if player.Character and player.Character:FindFirstChild("Humanoid") then
-        local hum = player.Character.Humanoid
-        hum.WalkSpeed = settings.walkSpeed
-        hum.JumpPower = settings.jumpPower
+        player.Character.Humanoid.WalkSpeed = settings.walkSpeed
+        player.Character.Humanoid.JumpPower = settings.jumpPower
     end
 end)
 
--- NoClip Оптимизированный
+-- NoClip
 runService.Stepped:Connect(function()
     if settings.noClipEnabled and player.Character then
-        for _, part in pairs(player.Character:GetChildren()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
-            elseif part:IsA("Model") then
-                for _, subpart in pairs(part:GetChildren()) do
-                    if subpart:IsA("BasePart") then subpart.CanCollide = false end
-                end
-            end
-        end
+        for _, part in pairs(player.Character:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
     end
 end)
 
@@ -713,21 +647,7 @@ userInputService.JumpRequest:Connect(function()
     end
 end)
 
--- Anti-AFK
-task_spawn(function()
-    while task_wait(5) do
-        if not settings.active then break end
-        if settings.antiAfkEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local hrp = player.Character.HumanoidRootPart
-            local currentPos = hrp.CFrame
-            hrp.CFrame = currentPos * CFrame.new(0, 0.01, 0)
-            task_wait(0.1)
-            hrp.CFrame = currentPos
-        end
-    end
-end)
-
--- Auto Clicker (Оптимизированный)
+-- Auto Clicker
 task_spawn(function()
     local vim = game:GetService("VirtualInputManager")
     while task_wait(0.1) do
@@ -741,23 +661,8 @@ end)
 
 -- Обработка клавиш
 userInputService.InputBegan:Connect(function(input, gp)
-    if not settings.keybindsEnabled then return end
-    if not gp then
-        if settings.keybinds.toggleMenu and input.KeyCode == settings.keybinds.toggleMenu then
-            settings.menuVisible = not settings.menuVisible
-            mainFrame.Visible = settings.menuVisible
-        elseif settings.keybinds.toggleFly and input.KeyCode == settings.keybinds.toggleFly then
-            settings.flyEnabled = not settings.flyEnabled
-            updateMenu()
-        elseif settings.keybinds.toggleNoClip and input.KeyCode == settings.keybinds.toggleNoClip then
-            settings.noClipEnabled = not settings.noClipEnabled
-            updateMenu()
-        elseif settings.keybinds.toggleInfiniteJump and input.KeyCode == settings.keybinds.toggleInfiniteJump then
-            settings.infiniteJumpEnabled = not settings.infiniteJumpEnabled
-            updateMenu()
-        elseif settings.keybinds.toggleAntiAfk and input.KeyCode == settings.keybinds.toggleAntiAfk then
-            settings.antiAfkEnabled = not settings.antiAfkEnabled
-            updateMenu()
-        end
+    if not gp and settings.keybinds.toggleMenu and input.KeyCode == settings.keybinds.toggleMenu then
+        settings.menuVisible = not settings.menuVisible
+        mainFrame.Visible = settings.menuVisible
     end
 end)
