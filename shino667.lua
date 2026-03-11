@@ -1,4 +1,4 @@
--- [[ SHINO V 4.6 - RESTORED & ENHANCED ]] --
+-- [[ SHINO V 4.7 - ULTIMATE & RESTORED ]] --
 local player = game.Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local userInputService = game:GetService("UserInputService")
@@ -9,7 +9,7 @@ local tweenService = game:GetService("TweenService")
 local httpService = game:GetService("HttpService")
 local lighting = game:GetService("Lighting")
 
--- Оптимизация (Кэширование функций)
+-- Кэширование
 local math_floor = math.floor
 local math_clamp = math.clamp
 local task_wait = task.wait
@@ -33,12 +33,12 @@ local settings = {
     fovValue = 70,
     streamproofEnabled = true,
     
-    -- Hitboxes (New)
+    -- Hitboxes (Restored Part Choice)
     hitboxEnabled = false,
     hitboxSize = 2,
     hitboxTransparency = 0.5,
     hitboxColor = Color3.fromRGB(255, 0, 0),
-    hitboxPart = "HumanoidRootPart",
+    hitboxPart = "HumanoidRootPart", -- "Head", "Torso", "HumanoidRootPart"
     
     -- Colors
     colorVisible = Color3.fromRGB(255, 255, 255),
@@ -58,7 +58,7 @@ local settings = {
     autoClickerEnabled = false,
     keybindsEnabled = true,
 
-    -- Keybinds (Restored)
+    -- Keybinds
     keybinds = {
         toggleMenu = Enum.KeyCode.RightShift,
         toggleFly = nil,
@@ -67,7 +67,7 @@ local settings = {
         toggleAntiAfk = nil,
     },
     
-    -- Config (Restored)
+    -- Config
     configName = "ShinoConfig.json",
     
     -- UI Theme
@@ -97,7 +97,7 @@ local originalLighting = {
 }
 
 -- ==========================================
--- 0. UTILS & PROTECTION
+-- 0. PROTECTION
 -- ==========================================
 local function protectGui(gui)
     if not gui then return end
@@ -214,7 +214,7 @@ contentArea.ScrollBarThickness = 0
 contentArea.CanvasSize = UDim2.new(0, 0, 2.5, 0)
 Instance.new("UIListLayout", contentArea).Padding = UDim.new(0, 12)
 
--- UI Elements Creators
+-- UI Creators
 local function createToggle(name, key, parent, callback)
     local frame = Instance.new("Frame", parent)
     frame.Size = UDim2.new(1, -15, 0, 45)
@@ -289,6 +289,39 @@ local function createSlider(name, key, min, max, parent, callback)
     sliderBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true update(input) end end)
     userInputService.InputChanged:Connect(function(input) if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then update(input) end end)
     userInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
+end
+
+local function createDropdown(name, key, options, parent)
+    local frame = Instance.new("Frame", parent)
+    frame.Size = UDim2.new(1, -15, 0, 45)
+    frame.BackgroundColor3 = settings.menuBackgroundColor
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, settings.menuButtonCornerRadius)
+    
+    local label = Instance.new("TextLabel", frame)
+    label.Size = UDim2.new(1, -120, 1, 0)
+    label.Position = UDim2.new(0, 15, 0, 0)
+    label.Text = name .. ": " .. settings[key]
+    label.TextColor3 = settings.menuTextColor
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 14
+    
+    local btn = Instance.new("TextButton", frame)
+    btn.Size = UDim2.new(0, 100, 0, 25)
+    btn.Position = UDim2.new(1, -110, 0.5, -12.5)
+    btn.BackgroundColor3 = settings.menuButtonColor
+    btn.Text = "Change"
+    btn.TextColor3 = settings.menuTextColor
+    Instance.new("UICorner", btn)
+    
+    local index = 1
+    btn.MouseButton1Click:Connect(function()
+        index = index + 1
+        if index > #options then index = 1 end
+        settings[key] = options[index]
+        label.Text = name .. ": " .. settings[key]
+    end)
 end
 
 local function createKeybind(name, key, parent)
@@ -389,6 +422,7 @@ local function updateMenu()
         
     elseif settings.currentTab == "Hitboxes" then
         createToggle("Enable Hitboxes", "hitboxEnabled", contentArea)
+        createDropdown("Target Part", "hitboxPart", {"HumanoidRootPart", "Head", "Torso"}, contentArea)
         createSlider("Hitbox Size", "hitboxSize", 1, 100, contentArea)
         createSlider("Transparency", "hitboxTransparency", 0, 100, contentArea)
         createColorPicker("Hitbox Color:", "hitboxColor", contentArea)
@@ -481,7 +515,17 @@ runService.RenderStepped:Connect(function()
                 obj.Highlight.Enabled = settings.espBoxes; obj.Highlight.FillColor = finalColor
                 obj.Billboard.Enabled = (settings.espNames or settings.espHealth); obj.HealthBar.Parent.Visible = settings.espHealth; obj.HealthBar.Size = UDim2.new(hum.Health / hum.MaxHealth, 0, 1, 0)
                 if settings.espNames then local d = math_floor((root.Position - player.Character.HumanoidRootPart.Position).Magnitude); obj.Label.Text = targetPlayer.Name .. " [" .. d .. "s]"; obj.Label.TextColor3 = finalColor else obj.Label.Text = "" end
-                if settings.hitboxEnabled then root.Size = Vector3.new(settings.hitboxSize, settings.hitboxSize, settings.hitboxSize); root.Transparency = settings.hitboxTransparency / 100; root.Color = settings.hitboxColor; root.CanCollide = false end
+                
+                -- HITBOX LOGIC (RE-IMPLEMENTED CHOICE)
+                if settings.hitboxEnabled then
+                    local part = obj.Char:FindFirstChild(settings.hitboxPart)
+                    if part then
+                        part.Size = Vector3.new(settings.hitboxSize, settings.hitboxSize, settings.hitboxSize)
+                        part.Transparency = settings.hitboxTransparency / 100
+                        part.Color = settings.hitboxColor
+                        part.CanCollide = false
+                    end
+                end
             else obj.Highlight.Enabled = false; obj.Billboard.Enabled = false end
         end
     end
