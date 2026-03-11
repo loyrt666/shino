@@ -1,4 +1,4 @@
--- [[ SHINO V 4.7 - ULTIMATE & RESTORED ]] --
+-- [[ SHINO V 4.8 - UNIQUE & ADVANCED ]] --
 local player = game.Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local userInputService = game:GetService("UserInputService")
@@ -33,12 +33,17 @@ local settings = {
     fovValue = 70,
     streamproofEnabled = true,
     
-    -- Hitboxes (Restored Part Choice)
+    -- UNIQUE VISUALS (V 4.8)
+    xrayEnabled = false,
+    rainbowUI = false,
+    atmosphereChanger = "Default", -- "Cyberpunk", "Hell", "Frozen", "Night"
+    
+    -- Hitboxes
     hitboxEnabled = false,
     hitboxSize = 2,
     hitboxTransparency = 0.5,
     hitboxColor = Color3.fromRGB(255, 0, 0),
-    hitboxPart = "HumanoidRootPart", -- "Head", "Torso", "HumanoidRootPart"
+    hitboxPart = "HumanoidRootPart",
     
     -- Colors
     colorVisible = Color3.fromRGB(255, 255, 255),
@@ -52,6 +57,10 @@ local settings = {
     infiniteJumpEnabled = false,
     walkSpeed = 16,
     jumpPower = 50,
+    
+    -- UNIQUE MOVEMENT
+    spinBotEnabled = false,
+    spinSpeed = 50,
 
     -- Misc
     antiAfkEnabled = false,
@@ -93,11 +102,13 @@ local originalLighting = {
     ClockTime = lighting.ClockTime,
     FogEnd = lighting.FogEnd,
     GlobalShadows = lighting.GlobalShadows,
-    Ambient = lighting.Ambient
+    Ambient = lighting.Ambient,
+    OutdoorAmbient = lighting.OutdoorAmbient,
+    ColorShift_Top = lighting.ColorShift_Top
 }
 
 -- ==========================================
--- 0. PROTECTION
+-- 0. PROTECTION & UTILS
 -- ==========================================
 local function protectGui(gui)
     if not gui then return end
@@ -112,7 +123,44 @@ end
 local parentGui = (gethui and gethui()) or (game:GetService("CoreGui"):FindFirstChild("RobloxGui")) or playerGui
 
 -- ==========================================
--- 1. WATERMARK
+-- 1. UNIQUE: ATMOSPHERE CHANGER
+-- ==========================================
+local function updateAtmosphere(mode)
+    if mode == "Default" then
+        lighting.Brightness = originalLighting.Brightness
+        lighting.ClockTime = originalLighting.ClockTime
+        lighting.FogEnd = originalLighting.FogEnd
+        lighting.GlobalShadows = originalLighting.GlobalShadows
+        lighting.Ambient = originalLighting.Ambient
+        lighting.OutdoorAmbient = originalLighting.OutdoorAmbient
+    elseif mode == "Cyberpunk" then
+        lighting.Brightness = 2
+        lighting.ClockTime = 0
+        lighting.FogEnd = 1500
+        lighting.Ambient = Color3.fromRGB(255, 0, 255)
+        lighting.OutdoorAmbient = Color3.fromRGB(0, 255, 255)
+    elseif mode == "Hell" then
+        lighting.Brightness = 1
+        lighting.ClockTime = 0
+        lighting.FogEnd = 500
+        lighting.Ambient = Color3.fromRGB(255, 0, 0)
+        lighting.OutdoorAmbient = Color3.fromRGB(50, 0, 0)
+    elseif mode == "Frozen" then
+        lighting.Brightness = 2
+        lighting.ClockTime = 12
+        lighting.FogEnd = 1000
+        lighting.Ambient = Color3.fromRGB(0, 255, 255)
+        lighting.OutdoorAmbient = Color3.fromRGB(200, 255, 255)
+    elseif mode == "Night" then
+        lighting.Brightness = 0.5
+        lighting.ClockTime = 0
+        lighting.FogEnd = 10000
+        lighting.Ambient = Color3.fromRGB(20, 20, 50)
+    end
+end
+
+-- ==========================================
+-- 2. WATERMARK & MENU
 -- ==========================================
 local watermarkGui = Instance.new("ScreenGui", parentGui)
 watermarkGui.Name = "ShinoWatermark"
@@ -127,20 +175,7 @@ watermarkFrame.BorderSizePixel = 0
 watermarkFrame.Active = true
 watermarkFrame.Draggable = true
 Instance.new("UICorner", watermarkFrame).CornerRadius = UDim.new(0, 6)
-
-local function createGlow(parent, size)
-    local glow = Instance.new("ImageLabel", parent)
-    glow.Name = "Glow"
-    glow.BackgroundTransparency = 1
-    glow.Position = UDim2.new(0, -size, 0, -size)
-    glow.Size = UDim2.new(1, size*2, 1, size*2)
-    glow.ZIndex = parent.ZIndex - 1
-    glow.Image = "rbxassetid://1316045217"
-    glow.ImageColor3 = settings.accent
-    glow.ImageTransparency = 0.6
-    return glow
-end
-createGlow(watermarkFrame, 15)
+local watermarkGlow = createGlow(watermarkFrame, 15)
 
 local watermarkText = Instance.new("TextLabel", watermarkFrame)
 watermarkText.Size = UDim2.new(1, -20, 1, 0)
@@ -151,6 +186,21 @@ watermarkText.TextSize = 14
 watermarkText.Font = Enum.Font.Code
 watermarkText.Text = "SHINO.cc"
 watermarkText.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Rainbow UI Logic
+task_spawn(function()
+    local hue = 0
+    while task_wait() do
+        if settings.rainbowUI then
+            hue = hue + 0.01
+            if hue > 1 then hue = 0 end
+            local color = Color3.fromHSV(hue, 0.8, 1)
+            settings.accent = color
+            watermarkGlow.ImageColor3 = color
+            -- Update UI accents if needed
+        end
+    end
+end)
 
 local function updateWatermarkVisual()
     watermarkFrame.Visible = settings.watermarkEnabled
@@ -170,7 +220,7 @@ task_spawn(function()
 end)
 
 -- ==========================================
--- 2. MAIN MENU
+-- 3. MAIN MENU UI
 -- ==========================================
 local screenGui = Instance.new("ScreenGui", parentGui)
 screenGui.Name = "ShinoNeonMenu"
@@ -185,7 +235,7 @@ mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 mainFrame.Draggable = true
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, settings.menuCornerRadius)
-createGlow(mainFrame, 30)
+local mainGlow = createGlow(mainFrame, 30)
 
 local sideBar = Instance.new("Frame", mainFrame)
 sideBar.Size = UDim2.new(0, 150, 1, 0)
@@ -214,7 +264,17 @@ contentArea.ScrollBarThickness = 0
 contentArea.CanvasSize = UDim2.new(0, 0, 2.5, 0)
 Instance.new("UIListLayout", contentArea).Padding = UDim.new(0, 12)
 
--- UI Creators
+-- Rainbow Glow Update
+task_spawn(function()
+    while task_wait() do
+        if settings.rainbowUI then
+            mainGlow.ImageColor3 = settings.accent
+            title.TextColor3 = settings.accent
+        end
+    end
+end)
+
+-- UI Creators (Same as V4.7 with improvements)
 local function createToggle(name, key, parent, callback)
     local frame = Instance.new("Frame", parent)
     frame.Size = UDim2.new(1, -15, 0, 45)
@@ -291,7 +351,7 @@ local function createSlider(name, key, min, max, parent, callback)
     userInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
 end
 
-local function createDropdown(name, key, options, parent)
+local function createDropdown(name, key, options, parent, callback)
     local frame = Instance.new("Frame", parent)
     frame.Size = UDim2.new(1, -15, 0, 45)
     frame.BackgroundColor3 = settings.menuBackgroundColor
@@ -311,7 +371,7 @@ local function createDropdown(name, key, options, parent)
     btn.Size = UDim2.new(0, 100, 0, 25)
     btn.Position = UDim2.new(1, -110, 0.5, -12.5)
     btn.BackgroundColor3 = settings.menuButtonColor
-    btn.Text = "Change"
+    btn.Text = "Next"
     btn.TextColor3 = settings.menuTextColor
     Instance.new("UICorner", btn)
     
@@ -321,6 +381,7 @@ local function createDropdown(name, key, options, parent)
         if index > #options then index = 1 end
         settings[key] = options[index]
         label.Text = name .. ": " .. settings[key]
+        if callback then callback(settings[key]) end
     end)
 end
 
@@ -400,7 +461,18 @@ local function updateMenu()
         createToggle("ESP Boxes", "espBoxes", contentArea)
         createToggle("ESP Names", "espNames", contentArea)
         createToggle("Health Bar", "espHealth", contentArea)
-        createToggle("Team Check", "teamCheck", contentArea)
+        createToggle("X-Ray (Unique)", "xrayEnabled", contentArea, function(v)
+            for _, part in pairs(workspace:GetDescendants()) do
+                if part:IsA("BasePart") and not part:IsDescendantOf(player.Character) and not players:GetPlayerFromCharacter(part.Parent) then
+                    if v then
+                        if not part:GetAttribute("OldTrans") then part:SetAttribute("OldTrans", part.Transparency) end
+                        part.Transparency = 0.5
+                    else
+                        part.Transparency = part:GetAttribute("OldTrans") or 0
+                    end
+                end
+            end
+        end)
         createToggle("Fullbright", "fullbrightEnabled", contentArea, function(v)
             if v then
                 lighting.Brightness = 2; lighting.ClockTime = 14; lighting.FogEnd = 100000; lighting.GlobalShadows = false; lighting.Ambient = Color3.new(1,1,1)
@@ -408,15 +480,18 @@ local function updateMenu()
                 lighting.Brightness = originalLighting.Brightness; lighting.ClockTime = originalLighting.ClockTime; lighting.FogEnd = originalLighting.FogEnd; lighting.GlobalShadows = originalLighting.GlobalShadows; lighting.Ambient = originalLighting.Ambient
             end
         end)
+        createDropdown("Atmosphere (Unique)", "atmosphereChanger", {"Default", "Cyberpunk", "Hell", "Frozen", "Night"}, contentArea, updateAtmosphere)
         createSlider("FOV", "fovValue", 30, 120, contentArea)
+        createToggle("Rainbow UI (Unique)", "rainbowUI", contentArea)
         createColorPicker("Visible Color:", "colorVisible", contentArea)
-        createColorPicker("Hidden Color:", "colorHidden", contentArea)
         
     elseif settings.currentTab == "Movement" then
         createToggle("Fly", "flyEnabled", contentArea)
         createSlider("Fly Speed", "flySpeed", 1, 200, contentArea)
         createToggle("NoClip", "noClipEnabled", contentArea)
         createToggle("Infinite Jump", "infiniteJumpEnabled", contentArea)
+        createToggle("SpinBot (Unique)", "spinBotEnabled", contentArea)
+        createSlider("Spin Speed", "spinSpeed", 1, 100, contentArea)
         createSlider("WalkSpeed", "walkSpeed", 1, 128, contentArea)
         createSlider("JumpPower", "jumpPower", 1, 300, contentArea)
         
@@ -479,7 +554,7 @@ createTab("Visuals"); createTab("Movement"); createTab("Hitboxes"); createTab("P
 updateMenu()
 
 -- ==========================================
--- 3. LOGIC (ESP & HITBOXES)
+-- 4. LOGIC (ESP, HITBOXES, SPINBOT)
 -- ==========================================
 local function createEsp(targetPlayer)
     if targetPlayer == player then return end
@@ -506,6 +581,12 @@ players.PlayerAdded:Connect(createEsp)
 runService.RenderStepped:Connect(function()
     if not settings.active then return end
     if workspace.CurrentCamera then workspace.CurrentCamera.FieldOfView = settings.fovValue end
+    
+    -- SPINBOT LOGIC
+    if settings.spinBotEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        player.Character.HumanoidRootPart.CFrame = player.Character.HumanoidRootPart.CFrame * CFrame.Angles(0, math.rad(settings.spinSpeed), 0)
+    end
+    
     for targetPlayer, obj in pairs(espObjects) do
         if obj.Char and obj.Char.Parent then
             local hum = obj.Char:FindFirstChild("Humanoid"); local root = obj.Char:FindFirstChild("HumanoidRootPart")
@@ -516,7 +597,7 @@ runService.RenderStepped:Connect(function()
                 obj.Billboard.Enabled = (settings.espNames or settings.espHealth); obj.HealthBar.Parent.Visible = settings.espHealth; obj.HealthBar.Size = UDim2.new(hum.Health / hum.MaxHealth, 0, 1, 0)
                 if settings.espNames then local d = math_floor((root.Position - player.Character.HumanoidRootPart.Position).Magnitude); obj.Label.Text = targetPlayer.Name .. " [" .. d .. "s]"; obj.Label.TextColor3 = finalColor else obj.Label.Text = "" end
                 
-                -- HITBOX LOGIC (RE-IMPLEMENTED CHOICE)
+                -- HITBOX LOGIC
                 if settings.hitboxEnabled then
                     local part = obj.Char:FindFirstChild(settings.hitboxPart)
                     if part then
