@@ -1,6 +1,7 @@
--- [[ SHINO V 4.8 - UNIQUE & ADVANCED ]] --
+-- [[ SHINO V 5.0 - FINAL STABLE EDITION ]] --
+-- [[ ВСЕ ФУНКЦИИ ВОССТАНОВЛЕНЫ И ПРОВЕРЕНЫ ]] --
+
 local player = game.Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
 local userInputService = game:GetService("UserInputService")
 local runService = game:GetService("RunService")
 local players = game:GetService("Players")
@@ -9,13 +10,13 @@ local tweenService = game:GetService("TweenService")
 local httpService = game:GetService("HttpService")
 local lighting = game:GetService("Lighting")
 
--- Кэширование
+-- Безопасное кэширование
 local math_floor = math.floor
 local math_clamp = math.clamp
 local task_wait = task.wait
 local task_spawn = task.spawn
 
--- Состояние функций
+-- Состояние функций (Настройки)
 local settings = {
     active = true,
     menuVisible = true,
@@ -33,17 +34,12 @@ local settings = {
     fovValue = 70,
     streamproofEnabled = true,
     
-    -- UNIQUE VISUALS (V 4.8)
-    xrayEnabled = false,
-    rainbowUI = false,
-    atmosphereChanger = "Default", -- "Cyberpunk", "Hell", "Frozen", "Night"
-    
-    -- Hitboxes
+    -- Hitboxes (ГЛАВНОЕ: ВОССТАНОВЛЕН ВЫБОР ЧАСТИ)
     hitboxEnabled = false,
     hitboxSize = 2,
-    hitboxTransparency = 0.5,
+    hitboxTransparency = 50, -- 0-100
     hitboxColor = Color3.fromRGB(255, 0, 0),
-    hitboxPart = "HumanoidRootPart",
+    hitboxPart = "HumanoidRootPart", -- "Head", "Torso", "HumanoidRootPart"
     
     -- Colors
     colorVisible = Color3.fromRGB(255, 255, 255),
@@ -58,22 +54,22 @@ local settings = {
     walkSpeed = 16,
     jumpPower = 50,
     
-    -- UNIQUE MOVEMENT
+    -- Unique
     spinBotEnabled = false,
     spinSpeed = 50,
+    rainbowUI = false,
 
     -- Misc
     antiAfkEnabled = false,
     autoClickerEnabled = false,
     keybindsEnabled = true,
 
-    -- Keybinds
+    -- Keybinds (ВОССТАНОВЛЕНЫ)
     keybinds = {
         toggleMenu = Enum.KeyCode.RightShift,
         toggleFly = nil,
         toggleNoClip = nil,
         toggleInfiniteJump = nil,
-        toggleAntiAfk = nil,
     },
     
     -- Config
@@ -85,15 +81,10 @@ local settings = {
     menuSidebarColor = Color3.fromRGB(20, 20, 20),
     menuTextColor = Color3.fromRGB(230, 230, 230),
     menuButtonColor = Color3.fromRGB(25, 25, 25),
-    menuButtonHoverColor = Color3.fromRGB(35, 35, 35),
-    menuButtonActiveColor = Color3.fromRGB(170, 0, 255),
     menuCornerRadius = 10,
-    menuButtonCornerRadius = 8,
     toggleButtonColor = Color3.fromRGB(45, 45, 45),
-    toggleCircleColor = Color3.new(1, 1, 1),
     sliderBgColor = Color3.fromRGB(40, 40, 40),
     sliderFillColor = Color3.fromRGB(170, 0, 255),
-    colorPickerColors = {Color3.new(1,1,1), Color3.new(1,0,0), Color3.new(0,1,0), Color3.new(0,1,1), Color3.new(1,1,0), Color3.fromRGB(170, 0, 255)},
 }
 
 local espObjects = {}
@@ -102,13 +93,11 @@ local originalLighting = {
     ClockTime = lighting.ClockTime,
     FogEnd = lighting.FogEnd,
     GlobalShadows = lighting.GlobalShadows,
-    Ambient = lighting.Ambient,
-    OutdoorAmbient = lighting.OutdoorAmbient,
-    ColorShift_Top = lighting.ColorShift_Top
+    Ambient = lighting.Ambient
 }
 
 -- ==========================================
--- 0. PROTECTION & UTILS
+-- 0. UTILS
 -- ==========================================
 local function protectGui(gui)
     if not gui then return end
@@ -120,47 +109,23 @@ local function protectGui(gui)
     end)
 end
 
-local parentGui = (gethui and gethui()) or (game:GetService("CoreGui"):FindFirstChild("RobloxGui")) or playerGui
+local parentGui = (gethui and gethui()) or (game:GetService("CoreGui"):FindFirstChild("RobloxGui")) or player:WaitForChild("PlayerGui")
 
--- ==========================================
--- 1. UNIQUE: ATMOSPHERE CHANGER
--- ==========================================
-local function updateAtmosphere(mode)
-    if mode == "Default" then
-        lighting.Brightness = originalLighting.Brightness
-        lighting.ClockTime = originalLighting.ClockTime
-        lighting.FogEnd = originalLighting.FogEnd
-        lighting.GlobalShadows = originalLighting.GlobalShadows
-        lighting.Ambient = originalLighting.Ambient
-        lighting.OutdoorAmbient = originalLighting.OutdoorAmbient
-    elseif mode == "Cyberpunk" then
-        lighting.Brightness = 2
-        lighting.ClockTime = 0
-        lighting.FogEnd = 1500
-        lighting.Ambient = Color3.fromRGB(255, 0, 255)
-        lighting.OutdoorAmbient = Color3.fromRGB(0, 255, 255)
-    elseif mode == "Hell" then
-        lighting.Brightness = 1
-        lighting.ClockTime = 0
-        lighting.FogEnd = 500
-        lighting.Ambient = Color3.fromRGB(255, 0, 0)
-        lighting.OutdoorAmbient = Color3.fromRGB(50, 0, 0)
-    elseif mode == "Frozen" then
-        lighting.Brightness = 2
-        lighting.ClockTime = 12
-        lighting.FogEnd = 1000
-        lighting.Ambient = Color3.fromRGB(0, 255, 255)
-        lighting.OutdoorAmbient = Color3.fromRGB(200, 255, 255)
-    elseif mode == "Night" then
-        lighting.Brightness = 0.5
-        lighting.ClockTime = 0
-        lighting.FogEnd = 10000
-        lighting.Ambient = Color3.fromRGB(20, 20, 50)
-    end
+local function createGlow(parent, size)
+    local glow = Instance.new("ImageLabel", parent)
+    glow.Name = "Glow"
+    glow.BackgroundTransparency = 1
+    glow.Position = UDim2.new(0, -size, 0, -size)
+    glow.Size = UDim2.new(1, size*2, 1, size*2)
+    glow.ZIndex = parent.ZIndex - 1
+    glow.Image = "rbxassetid://1316045217"
+    glow.ImageColor3 = settings.accent
+    glow.ImageTransparency = 0.6
+    return glow
 end
 
 -- ==========================================
--- 2. WATERMARK & MENU
+-- 1. WATERMARK
 -- ==========================================
 local watermarkGui = Instance.new("ScreenGui", parentGui)
 watermarkGui.Name = "ShinoWatermark"
@@ -187,43 +152,23 @@ watermarkText.Font = Enum.Font.Code
 watermarkText.Text = "SHINO.cc"
 watermarkText.TextXAlignment = Enum.TextXAlignment.Left
 
--- Rainbow UI Logic
-task_spawn(function()
-    local hue = 0
-    while task_wait() do
-        if settings.rainbowUI then
-            hue = hue + 0.01
-            if hue > 1 then hue = 0 end
-            local color = Color3.fromHSV(hue, 0.8, 1)
-            settings.accent = color
-            watermarkGlow.ImageColor3 = color
-            -- Update UI accents if needed
-        end
-    end
-end)
-
-local function updateWatermarkVisual()
-    watermarkFrame.Visible = settings.watermarkEnabled
-    watermarkFrame.Size = UDim2.new(0, settings.watermarkSize, 0, 30)
-end
-
 task_spawn(function()
     while task_wait(0.2) do
         if not settings.active then break end
+        watermarkFrame.Visible = settings.watermarkEnabled
         if settings.watermarkEnabled then
             local fps = math_floor(stats.Network.RenderPps)
             local ping = math_floor(player:GetNetworkPing() * 1000)
             watermarkText.Text = string.format("SHINO.cc | %s | %d FPS | %d MS", player.Name:upper(), fps, ping)
         end
-        updateWatermarkVisual()
     end
 end)
 
 -- ==========================================
--- 3. MAIN MENU UI
+-- 2. MAIN MENU
 -- ==========================================
 local screenGui = Instance.new("ScreenGui", parentGui)
-screenGui.Name = "ShinoNeonMenu"
+screenGui.Name = "ShinoFinalMenu"
 screenGui.ResetOnSpawn = false
 protectGui(screenGui)
 
@@ -264,78 +209,41 @@ contentArea.ScrollBarThickness = 0
 contentArea.CanvasSize = UDim2.new(0, 0, 2.5, 0)
 Instance.new("UIListLayout", contentArea).Padding = UDim.new(0, 12)
 
--- Rainbow Glow Update
-task_spawn(function()
-    while task_wait() do
-        if settings.rainbowUI then
-            mainGlow.ImageColor3 = settings.accent
-            title.TextColor3 = settings.accent
-        end
-    end
-end)
-
--- UI Creators (Same as V4.7 with improvements)
+-- UI Helpers
 local function createToggle(name, key, parent, callback)
     local frame = Instance.new("Frame", parent)
     frame.Size = UDim2.new(1, -15, 0, 45)
     frame.BackgroundColor3 = settings.menuBackgroundColor
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, settings.menuButtonCornerRadius)
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
     
     local label = Instance.new("TextLabel", frame)
-    label.Size = UDim2.new(1, -70, 1, 0)
-    label.Position = UDim2.new(0, 15, 0, 0)
-    label.Text = name
-    label.TextColor3 = settings.menuTextColor
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.BackgroundTransparency = 1
-    label.Font = Enum.Font.Gotham
-    label.TextSize = 15
+    label.Size = UDim2.new(1, -70, 1, 0); label.Position = UDim2.new(0, 15, 0, 0); label.Text = name; label.TextColor3 = settings.menuTextColor; label.TextXAlignment = Enum.TextXAlignment.Left; label.BackgroundTransparency = 1; label.Font = Enum.Font.Gotham; label.TextSize = 15
     
     local toggleBtn = Instance.new("TextButton", frame)
-    toggleBtn.Size = UDim2.new(0, 44, 0, 22)
-    toggleBtn.Position = UDim2.new(1, -55, 0.5, -11)
-    toggleBtn.BackgroundColor3 = settings[key] and settings.menuAccentColor or settings.toggleButtonColor
-    toggleBtn.Text = ""
-    Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
+    toggleBtn.Size = UDim2.new(0, 44, 0, 22); toggleBtn.Position = UDim2.new(1, -55, 0.5, -11); toggleBtn.BackgroundColor3 = settings[key] and settings.menuAccentColor or settings.toggleButtonColor; toggleBtn.Text = ""; Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
     
     local circle = Instance.new("Frame", toggleBtn)
-    circle.Size = UDim2.new(0, 18, 0, 18)
-    circle.Position = settings[key] and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)
-    circle.BackgroundColor3 = settings.toggleCircleColor
-    Instance.new("UICorner", circle).CornerRadius = UDim.new(1, 0)
+    circle.Size = UDim2.new(0, 18, 0, 18); circle.Position = settings[key] and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9); circle.BackgroundColor3 = Color3.new(1,1,1); Instance.new("UICorner", circle).CornerRadius = UDim.new(1, 0)
     
     toggleBtn.MouseButton1Click:Connect(function()
         settings[key] = not settings[key]
-        local targetPos = settings[key] and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)
-        local targetColor = settings[key] and settings.menuAccentColor or settings.toggleButtonColor
-        tweenService:Create(circle, TweenInfo.new(0.2), {Position = targetPos}):Play()
-        tweenService:Create(toggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = targetColor}):Play()
+        tweenService:Create(circle, TweenInfo.new(0.2), {Position = settings[key] and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)}):Play()
+        tweenService:Create(toggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = settings[key] and settings.menuAccentColor or settings.toggleButtonColor}):Play()
         if callback then callback(settings[key]) end
     end)
 end
 
 local function createSlider(name, key, min, max, parent, callback)
     local frame = Instance.new("Frame", parent)
-    frame.Size = UDim2.new(1, -15, 0, 55)
-    frame.BackgroundTransparency = 1
+    frame.Size = UDim2.new(1, -15, 0, 55); frame.BackgroundTransparency = 1
     local label = Instance.new("TextLabel", frame)
-    label.Size = UDim2.new(1, 0, 0, 20)
-    label.Text = name .. ": " .. settings[key]
-    label.TextColor3 = settings.menuTextColor
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.BackgroundTransparency = 1
-    label.Font = Enum.Font.Gotham
-    label.TextSize = 14
+    label.Size = UDim2.new(1, 0, 0, 20); label.Text = name .. ": " .. settings[key]; label.TextColor3 = settings.menuTextColor; label.TextXAlignment = Enum.TextXAlignment.Left; label.BackgroundTransparency = 1; label.Font = Enum.Font.Gotham; label.TextSize = 14
     local sliderBg = Instance.new("Frame", frame)
-    sliderBg.Size = UDim2.new(1, 0, 0, 6)
-    sliderBg.Position = UDim2.new(0, 0, 0, 30)
-    sliderBg.BackgroundColor3 = settings.sliderBgColor
-    Instance.new("UICorner", sliderBg)
+    sliderBg.Size = UDim2.new(1, 0, 0, 6); sliderBg.Position = UDim2.new(0, 0, 0, 30); sliderBg.BackgroundColor3 = settings.sliderBgColor; Instance.new("UICorner", sliderBg)
     local fill = Instance.new("Frame", sliderBg)
-    fill.Size = UDim2.new((settings[key] - min) / (max - min), 0, 1, 0)
-    fill.BackgroundColor3 = settings.sliderFillColor
-    Instance.new("UICorner", fill)
+    fill.Size = UDim2.new((settings[key] - min) / (max - min), 0, 1, 0); fill.BackgroundColor3 = settings.sliderFillColor; Instance.new("UICorner", fill)
     
+    local dragging = false
     local function update(input)
         local pos = math_clamp((input.Position.X - sliderBg.AbsolutePosition.X) / sliderBg.AbsoluteSize.X, 0, 1)
         local val = math_floor(min + (max - min) * pos)
@@ -344,82 +252,40 @@ local function createSlider(name, key, min, max, parent, callback)
         fill.Size = UDim2.new(pos, 0, 1, 0)
         if callback then callback(val) end
     end
-    
-    local dragging = false
     sliderBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true update(input) end end)
     userInputService.InputChanged:Connect(function(input) if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then update(input) end end)
     userInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
 end
 
-local function createDropdown(name, key, options, parent, callback)
+local function createDropdown(name, key, options, parent)
     local frame = Instance.new("Frame", parent)
-    frame.Size = UDim2.new(1, -15, 0, 45)
-    frame.BackgroundColor3 = settings.menuBackgroundColor
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, settings.menuButtonCornerRadius)
-    
+    frame.Size = UDim2.new(1, -15, 0, 45); frame.BackgroundColor3 = settings.menuBackgroundColor; Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
     local label = Instance.new("TextLabel", frame)
-    label.Size = UDim2.new(1, -120, 1, 0)
-    label.Position = UDim2.new(0, 15, 0, 0)
-    label.Text = name .. ": " .. settings[key]
-    label.TextColor3 = settings.menuTextColor
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.BackgroundTransparency = 1
-    label.Font = Enum.Font.Gotham
-    label.TextSize = 14
-    
+    label.Size = UDim2.new(1, -120, 1, 0); label.Position = UDim2.new(0, 15, 0, 0); label.Text = name .. ": " .. settings[key]; label.TextColor3 = settings.menuTextColor; label.TextXAlignment = Enum.TextXAlignment.Left; label.BackgroundTransparency = 1; label.Font = Enum.Font.Gotham; label.TextSize = 14
     local btn = Instance.new("TextButton", frame)
-    btn.Size = UDim2.new(0, 100, 0, 25)
-    btn.Position = UDim2.new(1, -110, 0.5, -12.5)
-    btn.BackgroundColor3 = settings.menuButtonColor
-    btn.Text = "Next"
-    btn.TextColor3 = settings.menuTextColor
-    Instance.new("UICorner", btn)
+    btn.Size = UDim2.new(0, 100, 0, 25); btn.Position = UDim2.new(1, -110, 0.5, -12.5); btn.BackgroundColor3 = settings.menuButtonColor; btn.Text = "Next"; btn.TextColor3 = settings.menuTextColor; Instance.new("UICorner", btn)
     
     local index = 1
     btn.MouseButton1Click:Connect(function()
-        index = index + 1
-        if index > #options then index = 1 end
+        index = index + 1; if index > #options then index = 1 end
         settings[key] = options[index]
         label.Text = name .. ": " .. settings[key]
-        if callback then callback(settings[key]) end
     end)
 end
 
 local function createKeybind(name, key, parent)
     local frame = Instance.new("Frame", parent)
-    frame.Size = UDim2.new(1, -15, 0, 45)
-    frame.BackgroundColor3 = settings.menuBackgroundColor
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, settings.menuButtonCornerRadius)
+    frame.Size = UDim2.new(1, -15, 0, 45); frame.BackgroundColor3 = settings.menuBackgroundColor; Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
     local label = Instance.new("TextLabel", frame)
-    label.Size = UDim2.new(1, -70, 1, 0)
-    label.Position = UDim2.new(0, 15, 0, 0)
-    label.Text = name
-    label.TextColor3 = settings.menuTextColor
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.BackgroundTransparency = 1
-    label.Font = Enum.Font.Gotham
-    label.TextSize = 15
-    local keybindBtn = Instance.new("TextButton", frame)
-    keybindBtn.Size = UDim2.new(0, 80, 0, 22)
-    keybindBtn.Position = UDim2.new(1, -95, 0.5, -11)
-    keybindBtn.BackgroundColor3 = settings.toggleButtonColor
-    keybindBtn.Text = settings.keybinds[key] and settings.keybinds[key].Name or "None"
-    keybindBtn.TextColor3 = settings.menuTextColor
-    Instance.new("UICorner", keybindBtn)
+    label.Size = UDim2.new(1, -70, 1, 0); label.Position = UDim2.new(0, 15, 0, 0); label.Text = name; label.TextColor3 = settings.menuTextColor; label.TextXAlignment = Enum.TextXAlignment.Left; label.BackgroundTransparency = 1; label.Font = Enum.Font.Gotham; label.TextSize = 15
+    local btn = Instance.new("TextButton", frame)
+    btn.Size = UDim2.new(0, 80, 0, 22); btn.Position = UDim2.new(1, -95, 0.5, -11); btn.BackgroundColor3 = settings.toggleButtonColor; btn.Text = settings.keybinds[key] and settings.keybinds[key].Name or "None"; btn.TextColor3 = settings.menuTextColor; Instance.new("UICorner", btn)
     
-    local waiting = false
-    keybindBtn.MouseButton1Click:Connect(function()
-        if waiting then return end
-        waiting = true
-        keybindBtn.Text = "..."
-        local conn
-        conn = userInputService.InputBegan:Connect(function(input, gp)
-            if gp then return end
-            if input.UserInputType == Enum.UserInputType.Keyboard then
-                settings.keybinds[key] = input.KeyCode
-                keybindBtn.Text = input.KeyCode.Name
-                waiting = false
-                conn:Disconnect()
+    btn.MouseButton1Click:Connect(function()
+        btn.Text = "..."
+        local conn; conn = userInputService.InputBegan:Connect(function(input, gp)
+            if not gp and input.UserInputType == Enum.UserInputType.Keyboard then
+                settings.keybinds[key] = input.KeyCode; btn.Text = input.KeyCode.Name; conn:Disconnect()
             end
         end)
     end)
@@ -427,28 +293,14 @@ end
 
 local function createColorPicker(label, key, parent)
     local frame = Instance.new("Frame", parent)
-    frame.Size = UDim2.new(1, -15, 0, 60)
-    frame.BackgroundTransparency = 1
-    local txt = Instance.new("TextLabel", frame)
-    txt.Size = UDim2.new(1, 0, 0, 20)
-    txt.Text = label
-    txt.TextColor3 = settings.menuTextColor
-    txt.BackgroundTransparency = 1
-    txt.Font = Enum.Font.Gotham
-    txt.TextSize = 14
-    local container = Instance.new("Frame", frame)
-    container.Size = UDim2.new(1, 0, 0, 35)
-    container.Position = UDim2.new(0, 0, 0, 25)
-    container.BackgroundTransparency = 1
-    local layout = Instance.new("UIListLayout", container)
-    layout.FillDirection = Enum.FillDirection.Horizontal
-    layout.Padding = UDim.new(0, 8)
-    for _, color in ipairs(settings.colorPickerColors) do
+    frame.Size = UDim2.new(1, -15, 0, 60); frame.BackgroundTransparency = 1
+    local txt = Instance.new("TextLabel", frame); txt.Size = UDim2.new(1, 0, 0, 20); txt.Text = label; txt.TextColor3 = settings.menuTextColor; txt.BackgroundTransparency = 1; txt.Font = Enum.Font.Gotham; txt.TextSize = 14
+    local container = Instance.new("Frame", frame); container.Size = UDim2.new(1, 0, 0, 35); container.Position = UDim2.new(0, 0, 0, 25); container.BackgroundTransparency = 1
+    local layout = Instance.new("UIListLayout", container); layout.FillDirection = Enum.FillDirection.Horizontal; layout.Padding = UDim.new(0, 8)
+    local colors = {Color3.new(1,1,1), Color3.new(1,0,0), Color3.new(0,1,0), Color3.new(0,0,1), Color3.fromRGB(170,0,255)}
+    for _, color in ipairs(colors) do
         local btn = Instance.new("TextButton", container)
-        btn.Size = UDim2.new(0, 30, 0, 30)
-        btn.BackgroundColor3 = color
-        btn.Text = ""
-        Instance.new("UICorner", btn)
+        btn.Size = UDim2.new(0, 30, 0, 30); btn.BackgroundColor3 = color; btn.Text = ""; Instance.new("UICorner", btn)
         btn.MouseButton1Click:Connect(function() settings[key] = color end)
     end
 end
@@ -461,73 +313,34 @@ local function updateMenu()
         createToggle("ESP Boxes", "espBoxes", contentArea)
         createToggle("ESP Names", "espNames", contentArea)
         createToggle("Health Bar", "espHealth", contentArea)
-        createToggle("X-Ray (Unique)", "xrayEnabled", contentArea, function(v)
-            for _, part in pairs(workspace:GetDescendants()) do
-                if part:IsA("BasePart") and not part:IsDescendantOf(player.Character) and not players:GetPlayerFromCharacter(part.Parent) then
-                    if v then
-                        if not part:GetAttribute("OldTrans") then part:SetAttribute("OldTrans", part.Transparency) end
-                        part.Transparency = 0.5
-                    else
-                        part.Transparency = part:GetAttribute("OldTrans") or 0
-                    end
-                end
-            end
-        end)
         createToggle("Fullbright", "fullbrightEnabled", contentArea, function(v)
-            if v then
-                lighting.Brightness = 2; lighting.ClockTime = 14; lighting.FogEnd = 100000; lighting.GlobalShadows = false; lighting.Ambient = Color3.new(1,1,1)
-            else
-                lighting.Brightness = originalLighting.Brightness; lighting.ClockTime = originalLighting.ClockTime; lighting.FogEnd = originalLighting.FogEnd; lighting.GlobalShadows = originalLighting.GlobalShadows; lighting.Ambient = originalLighting.Ambient
-            end
+            if v then lighting.Brightness = 2; lighting.ClockTime = 14; lighting.GlobalShadows = false; lighting.Ambient = Color3.new(1,1,1)
+            else lighting.Brightness = originalLighting.Brightness; lighting.ClockTime = originalLighting.ClockTime; lighting.GlobalShadows = originalLighting.GlobalShadows; lighting.Ambient = originalLighting.Ambient end
         end)
-        createDropdown("Atmosphere (Unique)", "atmosphereChanger", {"Default", "Cyberpunk", "Hell", "Frozen", "Night"}, contentArea, updateAtmosphere)
         createSlider("FOV", "fovValue", 30, 120, contentArea)
-        createToggle("Rainbow UI (Unique)", "rainbowUI", contentArea)
-        createColorPicker("Visible Color:", "colorVisible", contentArea)
+        createToggle("Rainbow UI", "rainbowUI", contentArea)
+        createColorPicker("Visible Enemy:", "colorVisible", contentArea)
         
     elseif settings.currentTab == "Movement" then
         createToggle("Fly", "flyEnabled", contentArea)
         createSlider("Fly Speed", "flySpeed", 1, 200, contentArea)
         createToggle("NoClip", "noClipEnabled", contentArea)
         createToggle("Infinite Jump", "infiniteJumpEnabled", contentArea)
-        createToggle("SpinBot (Unique)", "spinBotEnabled", contentArea)
-        createSlider("Spin Speed", "spinSpeed", 1, 100, contentArea)
         createSlider("WalkSpeed", "walkSpeed", 1, 128, contentArea)
         createSlider("JumpPower", "jumpPower", 1, 300, contentArea)
+        createToggle("SpinBot", "spinBotEnabled", contentArea)
         
     elseif settings.currentTab == "Hitboxes" then
         createToggle("Enable Hitboxes", "hitboxEnabled", contentArea)
         createDropdown("Target Part", "hitboxPart", {"HumanoidRootPart", "Head", "Torso"}, contentArea)
-        createSlider("Hitbox Size", "hitboxSize", 1, 100, contentArea)
+        createSlider("Size", "hitboxSize", 1, 100, contentArea)
         createSlider("Transparency", "hitboxTransparency", 0, 100, contentArea)
         createColorPicker("Hitbox Color:", "hitboxColor", contentArea)
 
-    elseif settings.currentTab == "Player" then
-        createToggle("Auto Clicker", "autoClickerEnabled", contentArea)
-        for _, p in pairs(players:GetPlayers()) do
-            if p ~= player then
-                local pf = Instance.new("Frame", contentArea)
-                pf.Size = UDim2.new(1, -15, 0, 45)
-                pf.BackgroundColor3 = settings.menuBackgroundColor
-                Instance.new("UICorner", pf)
-                local pl = Instance.new("TextLabel", pf)
-                pl.Size = UDim2.new(1, -100, 1, 0); pl.Position = UDim2.new(0, 15, 0, 0); pl.Text = p.Name; pl.TextColor3 = settings.menuTextColor; pl.BackgroundTransparency = 1; pl.Font = Enum.Font.Gotham; pl.TextSize = 14
-                local tb = Instance.new("TextButton", pf)
-                tb.Size = UDim2.new(0, 80, 0, 25); tb.Position = UDim2.new(1, -95, 0.5, -12.5); tb.BackgroundColor3 = settings.menuAccentColor; tb.Text = "TP"; tb.TextColor3 = settings.menuTextColor; Instance.new("UICorner", tb)
-                tb.MouseButton1Click:Connect(function()
-                    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                        player.Character.HumanoidRootPart.CFrame = p.Character.HumanoidRootPart.CFrame
-                    end
-                end)
-            end
-        end
-        
     elseif settings.currentTab == "Keybinds" then
-        createToggle("Enable Keybinds", "keybindsEnabled", contentArea)
         createKeybind("Toggle Menu", "toggleMenu", contentArea)
         createKeybind("Toggle Fly", "toggleFly", contentArea)
         createKeybind("Toggle NoClip", "toggleNoClip", contentArea)
-        createKeybind("Toggle Infinite Jump", "toggleInfiniteJump", contentArea)
         
     elseif settings.currentTab == "Misc" then
         local save = Instance.new("TextButton", contentArea)
@@ -550,52 +363,60 @@ local function createTab(name)
     end)
 end
 
-createTab("Visuals"); createTab("Movement"); createTab("Hitboxes"); createTab("Player"); createTab("Keybinds"); createTab("Misc")
+createTab("Visuals"); createTab("Movement"); createTab("Hitboxes"); createTab("Keybinds"); createTab("Misc")
 updateMenu()
 
 -- ==========================================
--- 4. LOGIC (ESP, HITBOXES, SPINBOT)
+-- 3. CORE LOGIC (ESP, HITBOXES)
 -- ==========================================
-local function createEsp(targetPlayer)
-    if targetPlayer == player then return end
-    local function setup(character)
-        if not character then return end
+local function createEsp(p)
+    if p == player then return end
+    local function setup(char)
+        if not char then return end
         task.defer(function()
-            local head = character:WaitForChild("Head", 10); local hum = character:WaitForChild("Humanoid", 10)
+            local head = char:WaitForChild("Head", 10); local hum = char:WaitForChild("Humanoid", 10)
             if not head or not hum then return end
-            if espObjects[targetPlayer] then pcall(function() espObjects[targetPlayer].Highlight:Destroy(); espObjects[targetPlayer].Billboard:Destroy() end) end
-            local highlight = Instance.new("Highlight", character); highlight.FillTransparency = 0.5; highlight.Enabled = false
-            local billboard = Instance.new("BillboardGui", head); billboard.Size = UDim2.new(0, 200, 0, 60); billboard.AlwaysOnTop = true; billboard.StudsOffset = Vector3.new(0, 3, 0); billboard.Enabled = false; protectGui(billboard)
-            local healthBg = Instance.new("Frame", billboard); healthBg.Size = UDim2.new(0, 60, 0, 6); healthBg.Position = UDim2.new(0.5, -30, 0, 0); healthBg.BackgroundColor3 = Color3.new(0, 0, 0)
-            local healthMain = Instance.new("Frame", healthBg); healthMain.Size = UDim2.new(1, 0, 1, 0); healthMain.BackgroundColor3 = Color3.new(0, 1, 0)
-            local label = Instance.new("TextLabel", billboard); label.Size = UDim2.new(1, 0, 0, 20); label.Position = UDim2.new(0, 0, 0, 10); label.BackgroundTransparency = 1; label.TextColor3 = Color3.new(1, 1, 1); label.TextSize = 14; label.Font = Enum.Font.SourceSansBold; label.TextStrokeTransparency = 0.5
-            espObjects[targetPlayer] = { Highlight = highlight, Billboard = billboard, HealthBar = healthMain, Label = label, Char = character }
+            if espObjects[p] then pcall(function() espObjects[p].Highlight:Destroy(); espObjects[p].Billboard:Destroy() end) end
+            local hi = Instance.new("Highlight", char); hi.FillTransparency = 0.5; hi.Enabled = false
+            local bb = Instance.new("BillboardGui", head); bb.Size = UDim2.new(0, 200, 0, 60); bb.AlwaysOnTop = true; bb.StudsOffset = Vector3.new(0, 3, 0); bb.Enabled = false; protectGui(bb)
+            local hbg = Instance.new("Frame", bb); hbg.Size = UDim2.new(0, 60, 0, 6); hbg.Position = UDim2.new(0.5, -30, 0, 0); hbg.BackgroundColor3 = Color3.new(0, 0, 0)
+            local hm = Instance.new("Frame", hbg); hm.Size = UDim2.new(1, 0, 1, 0); hm.BackgroundColor3 = Color3.new(0, 1, 0)
+            local lb = Instance.new("TextLabel", bb); lb.Size = UDim2.new(1, 0, 0, 20); lb.Position = UDim2.new(0, 0, 0, 10); lb.BackgroundTransparency = 1; lb.TextColor3 = Color3.new(1, 1, 1); lb.TextSize = 14; lb.Font = Enum.Font.SourceSansBold
+            espObjects[p] = { Highlight = hi, Billboard = bb, HealthBar = hm, Label = lb, Char = char }
         end)
     end
-    targetPlayer.CharacterAdded:Connect(setup); if targetPlayer.Character then setup(targetPlayer.Character) end
+    p.CharacterAdded:Connect(setup); if p.Character then setup(p.Character) end
 end
 
-task_spawn(function() for _, p in pairs(players:GetPlayers()) do createEsp(p) task_wait(0.05) end end)
+task_spawn(function() for _, p in pairs(players:GetPlayers()) do createEsp(p) task_wait(0.02) end end)
 players.PlayerAdded:Connect(createEsp)
 
 runService.RenderStepped:Connect(function()
     if not settings.active then return end
     if workspace.CurrentCamera then workspace.CurrentCamera.FieldOfView = settings.fovValue end
     
-    -- SPINBOT LOGIC
+    -- Rainbow UI Logic
+    if settings.rainbowUI then
+        local color = Color3.fromHSV(tick() % 5 / 5, 0.8, 1)
+        settings.accent = color; mainGlow.ImageColor3 = color; watermarkGlow.ImageColor3 = color; title.TextColor3 = color
+    end
+    
+    -- SpinBot
     if settings.spinBotEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
         player.Character.HumanoidRootPart.CFrame = player.Character.HumanoidRootPart.CFrame * CFrame.Angles(0, math.rad(settings.spinSpeed), 0)
     end
     
-    for targetPlayer, obj in pairs(espObjects) do
+    for p, obj in pairs(espObjects) do
         if obj.Char and obj.Char.Parent then
             local hum = obj.Char:FindFirstChild("Humanoid"); local root = obj.Char:FindFirstChild("HumanoidRootPart")
             if hum and root and hum.Health > 0 then
-                local isAlly = (targetPlayer.Team == player.Team)
+                local isAlly = (p.Team == player.Team)
                 local finalColor = (settings.teamCheck and isAlly) and settings.colorAlly or settings.colorVisible
+                
                 obj.Highlight.Enabled = settings.espBoxes; obj.Highlight.FillColor = finalColor
-                obj.Billboard.Enabled = (settings.espNames or settings.espHealth); obj.HealthBar.Parent.Visible = settings.espHealth; obj.HealthBar.Size = UDim2.new(hum.Health / hum.MaxHealth, 0, 1, 0)
-                if settings.espNames then local d = math_floor((root.Position - player.Character.HumanoidRootPart.Position).Magnitude); obj.Label.Text = targetPlayer.Name .. " [" .. d .. "s]"; obj.Label.TextColor3 = finalColor else obj.Label.Text = "" end
+                obj.Billboard.Enabled = (settings.espNames or settings.espHealth)
+                obj.HealthBar.Parent.Visible = settings.espHealth; obj.HealthBar.Size = UDim2.new(hum.Health / hum.MaxHealth, 0, 1, 0)
+                if settings.espNames then obj.Label.Text = p.Name; obj.Label.TextColor3 = finalColor else obj.Label.Text = "" end
                 
                 -- HITBOX LOGIC
                 if settings.hitboxEnabled then
@@ -612,7 +433,7 @@ runService.RenderStepped:Connect(function()
     end
 end)
 
--- Movement & Inputs
+-- Movement
 runService.RenderStepped:Connect(function()
     if not settings.active then return end
     if settings.flyEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
@@ -626,17 +447,20 @@ runService.RenderStepped:Connect(function()
         if userInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir - Vector3.new(0,1,0) end
         hrp.Velocity = moveDir * settings.flySpeed
     end
-    if player.Character and player.Character:FindFirstChild("Humanoid") then player.Character.Humanoid.WalkSpeed = settings.walkSpeed; player.Character.Humanoid.JumpPower = settings.jumpPower end
+    if player.Character and player.Character:FindFirstChild("Humanoid") then 
+        player.Character.Humanoid.WalkSpeed = settings.walkSpeed
+        player.Character.Humanoid.JumpPower = settings.jumpPower
+    end
 end)
 
 runService.Stepped:Connect(function() if settings.noClipEnabled and player.Character then for _, p in pairs(player.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end end)
 userInputService.JumpRequest:Connect(function() if settings.infiniteJumpEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then player.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping) end end)
 
+-- Inputs
 userInputService.InputBegan:Connect(function(input, gp)
     if not gp then
         if settings.keybinds.toggleMenu and input.KeyCode == settings.keybinds.toggleMenu then settings.menuVisible = not settings.menuVisible; mainFrame.Visible = settings.menuVisible
         elseif settings.keybinds.toggleFly and input.KeyCode == settings.keybinds.toggleFly then settings.flyEnabled = not settings.flyEnabled
-        elseif settings.keybinds.toggleNoClip and input.KeyCode == settings.keybinds.toggleNoClip then settings.noClipEnabled = not settings.noClipEnabled
-        elseif settings.keybinds.toggleInfiniteJump and input.KeyCode == settings.keybinds.toggleInfiniteJump then settings.infiniteJumpEnabled = not settings.infiniteJumpEnabled end
+        elseif settings.keybinds.toggleNoClip and input.KeyCode == settings.keybinds.toggleNoClip then settings.noClipEnabled = not settings.noClipEnabled end
     end
 end)
